@@ -1,10 +1,10 @@
-(dede typeid)patch-v57&v57sp1-20121030.zip 织梦补丁
-Destoon.php	Destoon B2B System
-Gd_Thumbnail_Tool.php	图形处理
-HttpClient.class.php	httpclient类
-HttpClient.class.zip
-PHPMailer.class.php	邮件发送类
-cache.tar.gz 缓存
+(dede typeid)patch-v57&v57sp1-20121030.zip 织梦补丁<br>
+Destoon.php	Destoon B2B System<br>
+Gd_Thumbnail_Tool.php	图形处理<br>
+HttpClient.class.php	httpclient类<br>
+HttpClient.class.zip<br>
+PHPMailer.class.php	邮件发送类<br>
+cache.tar.gz 缓存<br>
 common.php	常用函数
 common1.php	常用函数
 dict.zip
