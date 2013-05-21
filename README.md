@@ -5,13 +5,13 @@ HttpClient.class.php	httpclient类<br>
 HttpClient.class.zip<br>
 PHPMailer.class.php	邮件发送类<br>
 cache.tar.gz 缓存<br>
-common.php	常用函数
-common1.php	常用函数
-dict.zip
-medoo.php	
-memcached-sessions.tar.gz	
-mgck.txt	敏感词汇 
-php360.zip	过滤
-pin.class.php	拼音类
-safe.class.php	安全 防XSS跨站 SQL注入
-validationcode.class.php 用PHP写一个验证码类，并进行封装。 类名： validationcode.class.php
+common.php	常用函数<br>
+common1.php	常用函数<br>
+dict.zip<br>
+medoo.php	<br>
+memcached-sessions.tar.gz	<br>
+mgck.txt	敏感词汇 <br>
+php360.zip	过滤<br>
+pin.class.php	拼音类<br>
+safe.class.php	安全 防XSS跨站 SQL注入<br>
+validationcode.class.php 用PHP写一个验证码类，并进行封装。 类名： validationcode.class.php<br>
