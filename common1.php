@@ -150,4 +150,18 @@ function post_check($post) {
      
     return $post; 
 }
+/*防止Xss攻击简单方法
+http://www.ibm.com/developerworks/cn/opensource/os-cn-php-xss/
+*/
+function removeXss($s){
+ //清空空格字符
+ $s = trim($s);
+ //过滤html标签
+ $s = strip_tags($s);
+ //将文本中的内容转换为html实体
+ $s = htmlspecialchars($s);
+ //加入字符转义
+ $s = addslashes($s);
+ return $s; 
+}
 ?>
