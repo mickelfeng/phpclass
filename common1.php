@@ -1,4 +1,42 @@
 <?php
+function foo(&$var)
+{
+    $var++;
+}
+
+$a=5;
+foo($a);
+echo $a;
+
+function genTree5($items) {
+    foreach ($items as $item)
+        $items[$item['pid']]['son'][$item['id']] = &$items[$item['id']];
+    return isset($items[0]['son']) ? $items[0]['son'] : array();
+}
+
+
+function genTree9($items) {
+    $tree = array(); //格式化好的树
+    foreach ($items as $item)
+        if (isset($items[$item['pid']]))
+            $items[$item['pid']]['son'][] = &$items[$item['id']];
+        else
+            $tree[] = &$items[$item['id']];
+    return $tree;
+}
+/*
+mysql_connect("localhost","root","putclub");
+mysql_select_db("ptscan");
+$resource=mysql_query("select id,pid,catalog as name from ts_books_catalog");
+
+while($row=mysql_fetch_assoc($resource)){
+    $items[$row['id']]=$row;
+}
+*/
+//print_r($items);
+//print_r(genTree9($items));
+
+
 function get_img($html)
 {
     preg_match_all('/<img.*?src=[\'|"]?(\S*?)[\'|"|\s]/is', $html, $m);
