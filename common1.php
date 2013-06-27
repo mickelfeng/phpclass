@@ -14,6 +14,9 @@ function genTree5($items) {
     return isset($items[0]['son']) ? $items[0]['son'] : array();
 }
 
+function GrabImage($url) {
+    if(preg_match('/^.+\/([^\/]+\.)(jpg|jpeg|gif|png)$/i', $url, $matches)&& ($img = @file_get_contents($url))) file_put_contents('photo/'.$matches[1].$matches[2], $img);
+}
 
 function genTree9($items) {
     $tree = array(); //格式化好的树
