@@ -1,0 +1,1789 @@
+我尽可能还原作者的语言风格，这也是本指南的一大亮点。
+
+《Beej的指南——网络编程》
+1. 序言
+    socket编程是不是让你很沮丧？要想从man手册中搞清楚这些是不是有点儿困难？你想做网络编程，但你又没时间去弄清楚一些细节，比如说：是不是该在调用connect()之前调用bind()，等等一些。
+    好吧，其实我已经干完这份儿脏活累活（意指作者已经掌握理解网络编程的知识）了，并且我非常非常想和所有人来分析那个这些知识。反正你看这本书就对了。这个指南旨在给有C语言基础的并且想了解网络编程的程序猿阅读。（没一定的C语言知识还是别来了，回去再练练吧）
+    请注意，我最终是跟上了未来的脚步，就是说已经更新了IPv6的指南，Enjoy！！！
+1.1. 适用人群
+    这本书是作为一本自学教程而写的，并不是一本全面的参考手册（参考手册绝对不是一百来页能描述完的）。最适合的读者是那些刚开始接触socket编程并且正在苦苦寻找教程的。总而言之，这不是所谓的完全参考手册。
+1.2. 平台和编译器
+    这本书中的包含的代码是使用Linux PC平台下的Gnu的gcc编译套件的（为什么描述这么长，如果你不懂为什么，那么又吃亏了）。一般来说，这些代码应该能在任意使用gcc编译套件的平台上编译。如果你给Windows编程的话，很显然，这些代码并不适用，具体你可以看看下面关于Windows编程的那段话。
+1.3. 官方主页和购买本书
+    唯一官方主页：http://beej.us/guide/bgnet/。
+    你不仅可以在官网上找到一些示例代码，而且还可以找到不同语言的翻译版本。（很遗憾，官网上的中文翻译版本的链接貌似失效了，正式因为这样，我才自己动手来翻译，自己动手，丰衣足食嘛）。
+    本书也有纸质印刷版，你可以去网站：http://beej.us/guide/url/bgbuy，购买精美的纸质书，如果你买了书，我会很欣赏的，因为你的行为支撑着我写作的生活方式。（我非常推荐大家去买作者的纸质书，貌似大陆现在不能直接买，得从国外买了带回来。我正考虑托朋友从国外买了带过来，其实我也推介作者把自己paypal放出来，大家捐助也是一种帮助的方式）
+1.4. 给Solaris/SunOS程序猿的提示
+    当你在Solaris/SunOS下编译时，你需要做一些额外的工作才能通过。在链接阶段，需要加上“-lnsl -lsocket -lresolv”，来使得链接器链接上正确的库。举例来说吧：
+    $ cc -o server server.c -lnsl -lsocket -lresolv
+    如果按照上面提示的做了以后还有错误，你再多加一个“-lxnet”试试看，说实话，我其实也不知道那是在干嘛，但是很多人看起来需要加上这个。
+    你还可以在调用setsockopt()的时候发生错误。因为这个函数原型在我的Linux平台和其他Sun平台是不同的，请做这样的替换：
+    int yes = 1;
+    换成：
+    char yes = '1';
+    正因为我没有Sun平台的设备，以至于我没有测试过上面所说的。这些问题和解决方法仅仅是其他人们通过邮件告诉我的。（我说老外就是诚实，做了就做了，没做就没做）。
+1.5. 给Windows程序猿的提示
+    作者在这扯了一大堆，但他主要想表达几个观点。
+    1.他对Windows不感冒；
+    2.他不推荐使用Windows；
+    3.他鼓励大家使用Linux，BSD或者其他的Unix来代替Windows。
+    但是有句话叫萝卜白菜各有所爱，如果你非要使用Windows，你将会很乐意了解到如下一些知识信息。
+    Cygwin，简单说，它是一组Unix工具套件，工作在Windows上，可以通过安装Cygwin来达到在Windows下使用Unix环境的目的。据小道消息，使用Cygwin就可以编译本书中的代码，而不用对它们做修改。（很明显，作者连Solaris都没有，更不会有Windows了，所以他应该也没Cygwin，所以自然只能是靠小道消息来验证了。我有Windows，我使用Cygwin，我告诉你这条小道消息是真的！）
+    如果非要使用纯粹的Windows环境来编译本书中的代码，读者需要做的工作如下所示：
+    首先要添加 #include <winsock.h>。切记，在调用任何socket库之前，需要先调用WSAStartup()函数，给出一个示例代码：
+    #include <winsock.h>
+    {
+        WSADATA wsaData;   // 如果这行不起作用
+        //WSAData wsaData; // 那么就试试用这行
+
+        // MAKEWORD(1, 1)使用Winsock1.1版, MAKEWORD(2, 0)使用Winsock2.0版:
+
+        if (WSAStartup(MAKEWORD(1, 1), &wsaData) != 0) {
+            fprintf(stderr, "WSAStartup failed.\n");
+            exit(1);
+        }
+    }
+    （我看到这里也不得不说，还是用Linux-like的系统比较好）
+    在链接阶段，得指定编译套件去链接Winsock的库，一般都是调用wsock32.lib或者winsock32.lib，如果是Winsock2.0版，就调用ws2_32.lib。在VC++集成开发环境中，这些指定库的操作可以这样完成：Project菜单 --> Settings --> Link --> 找到“Object/library modules”。然后把“wsock32.lib”添加到那张表里头。
+    最后当你再也不用sockets库时，需要调用WSACleanup()函数，具体细节请使用在线帮助手册吧。（我估计作者是编不下去了...）
+    一旦把上面这些做好了，本教程中大部分示例代码应该都可以适用于Windows了，但是也有些例外。比如说这个，你不要使用close()函数来关闭一个socket，这里你需要使用closesocket()函数来代替close()函数。另外select()函数只能用于socket描述符，而不能用于文件描述符（file descriptors），比如文件描述符0是代表stdin，标准输入。
+    想要知道更多关于Winsock的信息，应该查阅Winsock的FAQ。
+    我提供了四个FAQ的URL：
+    1.http://www.linux.com/
+    2.http://www.bsd.org/
+    3.http://www.cygwin.com/
+    4.http://tangentsoft.net/wskfaq/
+    本书的许多示例代码中用到了fork()系统调用，但是很不幸的是Windows并没有。你可能不得不通过连接一个符合POSIX标准的库来使得fork()系统调用生效，或者你也可以用CreateProcess()来代替代码中出现的fork()。使用系统调用fork()时并不需要输入任何参数，但是CreateProcess()需要用48bililion的参数。如果你没有达到那样子，那么CreateThread()会更容易使用。呃...讨论多线程什么的话题，已经超出了本书的讨论范围。我只能说这么多了，你懂得！（意思说作者自嘲是Windows idiot吧）
+1.6. 邮件政策
+    大体上来说我我也很乐意帮助大家回答你们遇到的问题，所以欢迎来搞。但是我不能保证每一封信都会回答，毕竟我自己的生活也非常紧张忙碌，如果我真的没时间回答你，我通常就把那封信给删了，别误会，这并不是针对任何人，仅仅是因为我不能总是有时间对于你们的要求给出详细的答案。
+    有个规则是，越复杂的问题，能得到我回应的可能性也越小。如果你能在提问之前精简你的问题，并且提供一些相关的信息（例如你使用的平台和编译套件、你得到的错误信息，任何你觉得会有助于解决问题的信息），那么你将会大大的增加得到回应的可能性。建议你读一读ESR的书吧，《How To Ask Question The Smart Way》，在http://www.catb.org/~esr/faqs/smart-questions.html。它会告诉你如果更聪明的提问。
+1.7. 申请镜像
+    如果你要给这个网站做镜像，我非常欢迎，不管是公共的镜像还是私有镜像。如果你愿意做一个公共镜像，并且想让我把它放置到本站主页上，请来信，地址是：beej@beej.us。
+1.8. 给译者的提示
+    （这一段貌似是给我看的）
+    如果你想要把这本书翻译成其他语言，请写信给我，邮箱就用上面那个。我会把你的翻译版本放在我的主页上面。请译者们尽管放心的在翻译版本里面加上你的名字和联系方式吧。
+    （我本不打算加的，但是看到这句话，好吧。）
+    y11022053@gmail.com，Michael，中国广东省。（有外企的同行在看嘛？能否内推一下我，呵呵）
+    你也可以在自己的主页提供翻译版本的下载链接，我会把这个链接放在我的主页，其实不管是放你那或者放我这，都行！
+    请注意接下来那一段中的有关许可证的限制条件的说明。
+1.9. 版权和出版
+    （此处省略一大堆，总而言之，你不能拿着作者的写的东西去出版卖钱，既不合法，也不合理。但是有一点，如果是为了教育，请放心拿着本书去印刷出版吧。唉，不得不感叹，国外只要涉及到教育，什么都好说。）
+
+2. socket是什么？
+    你总是听到别人谈论“sockets”，你可能在疑惑它们到底是什么东西。好吧，其实它们就是“一种使用标准Unix文件描述符来与其他程序通讯的方式”。
+    呃...还是没听明白？
+    好吧。我猜你可能听过一些著名Unix高手的一些名言锦句，例如Jeez的，“Unix下的每一个东西都是一个文件！”。他说的是事实，也就是说Unix程序进行任何类型的I/O操作，都是通过读和写文件描述符。简而言之，一个文件描述符就是一个整数，但是这个整数和一个已打开的文件关联起来了。但是关键点就在这里，这个所谓的文件可能是一个网络连接，一个FIFO，一个管道，一个终端，一个真正存于磁盘上的文件，亦或者任何类似于这样的其他东西。还是那句老话，Unix下的每一个东西都是一个文件！所以当你想要与其他程序通过Internet进行通讯的时候，你将要通过读写所谓的文件描述符来完成，可能暂时怀疑，不过你最好相信我。
+    “从哪获取用来进行网络通讯的文件描述符呢？”，答案就是调用socket()这个系统调用。它会返回一个socket描述符，然后你就可以通过使用特定的socket调用——send()和recv()，在这个socket描述符上来进行通讯了。
+    也许你有疑问了，如果说socket描述符也是一个文件描述符，那为什么我不能在这个socket描述符上使用平常用惯了的read()和write()函数来进行通讯呢？简单地说，你确实可以使用！但是有一点，对于你想传输的数据，send()和recv()提供更加强大的控制能力。
+    下一步我想告诉你，根据你使用的不同Unix-like系统，它们各自拥有不同的种类的sockets。有DARPA Internet地址（Internet Sockets），本地节点上的路径名（地址）（Unix Sockets），CCITT X.25地址（X.25 Sockets）（这种其实可以忽略）。请一定要注意，本书所讨论的是第一种：Internet Sockets。
+2.1. 两种不同类型的Internet Sockets
+    什么？还有两种不同类型的Internet Sockets？是的，我没扯蛋。其实不止两种类型，还有更多，我只是不想吓到你，所以我在这儿只告诉你有两种类型的Internet Sockets。还有一点我想告诉你，“Raw Sockets”是非常强大的，你应该敬仰它们！
+    好吧，不扯了。到底是Internet Sockets分为哪两种类型？
+    第一种是，“Stream Sockets”；另一种是“Datagram Sockets”。在本书的后面可能会被分别援引为“SOCK_STREAM”和“SOCK_DGRAM”。
+    用图来说明吧
+    Sockets +-> Internet Sockets +-> Stream Sockets   <--> SOCK_STREAM
+            +-> Unix Sockets     +-> Datagram Sockets <--> SOCK_DGRAM
+            +-> X.25 Sockets
+    Datagram Sockets有时被称作“无连接的sockets”。（尽管Datagram Sockets可以被connect()来连接，如果你真的想要这样做）
+    Stream Sockets是可靠的、双向连接的通讯流。如果你按照顺序发送“1,2”出去，这些数据将会按照“1,2”这个顺序到达通讯的另一头。并且数据的内容也不会出错。
+    哪些程序使用了Stream Sockets呢？你可能已经听说过telnet应用程序吧，它就是用了Stream Sockets。你输入的所有的字符都需要按照同样的顺序到达对方那边，不是嚒？不仅如此，web浏览器使用的HTTP协议，也是使用了Stream Sockets来获取页面。如果你用telnet远程连接到一个web网站的80端口，然后输入“GET / HTTP/ 1.0”，然后输入两次回车，对方真的会发送一个HTML页面过来给你哦！
+    Stream Sockets是如何实现这种高级的数据传输质量的？原来它们使用一个叫做“The Transmission Control Protocol”的协议，就是TCP协议啦（可以参考一下RFC 793来获取更多关于TCP的详细信息，URL是：http://tools.ietf.org/html/rfc793）。TCP协议可以使得你的数据按序到达并且数据内容无错误。你可能之前听过“TCP/IP”，这里的TCP就是那个TCP，而后面的IP指代的是“Internet Protocol”（可以参考RFC 791来获取更多关于IP的详细信息，URL是：http://tools.ietf.org/html/rtf791）。IP协议主要是负责处理Internet路由工作，它并不保对数据完整性负责。
+    （事实上TCP是基于IP的，IP负责控制数据怎么走才能到达目的地，TCP负责数据完整性和有序到达，具体可以参考TCP/IP详解这本书）
+    Datagram Sockets是怎么样的呢？为什么它们被称为“无连接”呢？他们具体在干什么？为什么说他们不可靠？为了弄清楚这些问题，首先要知道这些事实：如果你使用Datagram Sockets来发送一个datagram，它仅仅是可能会到达另一端，但是它不一定按序到达。但有一点你不用担心，如果到达了另一头，这些数据包肯定是无错的。
+    Datagram Sockets也是使用IP协议来完成路由工作的，但是Datagram Sockets并不是用TCP协议，它使用的是“The User Datagram Protocol”，也就是“UDP”协议（具体请参见RFC 768，URL是：http://tools.ietf.org/html/rfc768）。
+    为什么说“无连接”呢？从根本上说，相对于Stream sockets而言，Datagram Sockets在通讯的时候并没有去维持一条已打开的连接。你做的只是建立一个数据包，往IP头部里面填上目的地信息，然后就发出去了，并不需要一个连接。普遍来说，他们应用于当TCP栈不可用时或者需要传输一些并不是一定要送达的包的时候。使用它的典型程序有：tftp（Trivial File Transfer Protocol，算是FTP的兄弟版），dhcpcd（一个DHCP的客户端程序），多人游戏，音频流，视频会议，等等。
+    “呃，等等。我记得tftp和dhcpcd是可以被用于把二进制应用程序从一个主机传送到另一个主机上的！如果想要到达端的应用程序可以使用，那数据肯定不能丢失啊！这该怎么解释呢！”。
+    好吧，真相就是：tftp程序及其类似的这种程序，它们虽然基于UDP协议，但是在上层还有自己的协议！举个例子，tftp协议中规定，接受者对于每一个接收到的包都必须做出回复，意思是说“我收到了！”（也叫“ACK”包）。如果原始发送者未得到回复，打个比方，发送完包后，五秒内还没得到接受者发来的ACK包，那发送者就会重新发送一次刚才拿个包，然后周而复始，直到发送者得到接受者发来的ACK包。当你去实现一个既可靠的又基于SOCK_DGRAM的socket的应用程序的时候，这种确认的方式就非常重要了。（作者的意思是tftp协议是基于UDP协议的，在tftp协议中来增加可靠的控制机制）
+    像某些不需要可靠的连接的应用程序，例如说游戏或者音视频流媒体，直接可以忽略那些在传输过程中遗失的数据包，或者聪明的弥补这些数据包。（玩过《雷神之锤》（《Quake》）的玩家就知道这种影响的表现形式，用专业术语说就是丢包会造成“万恶的延迟”）（难道我会告诉你玩Dota也非常讨厌延迟吗？）
+    那为什么会使用一个不可靠的基础协议呢？两个原因：第一个是想追求速度，第二个还是对速度的追求！这种发送后就不再管的方式比发送后全程跟踪并且保证安全、有序到达的方式更快。相对来说，如果你发送的内容是聊天的消息，那肯定用TCP更好；如果你发送的是关于所有玩家地理位置更新的信息，假设每秒要发送40个次，并且其中的一到两个数据包并不会带来太大的负面影响，那UDP当然是一个非常不错的选择。
+2.2. 网络的原理以及一些胡扯
+    自从我提到协议分层概念起，就应该来谈论一下网络到底是如何真正工作的这个话题了。我也会展示一些示例，比如SOCK_DGRAM包是如何被制造的。事实上，你其实可以跳过这一段，然而这一段却又能给你带来关于网络原理的背景知识。（我建议别跳过，学习某个东西，背景知识往往很重要，也就是“历史课”很重要，看这本书之前，你要是看过TCP/IP详解，将非常有利于吸收本书的精华！）
+    |Ethernet{IP{UDP[TFTP(Data)]}}| ...
+    图：数据的封装格式
+    这里用TFTP程序产生的数据包来举例说明，上图是一个从Internet网络上抓到的数据包，从左到右，协议层级越来越高。
+    所以说，了解一些数据包的封装形式非常非常重要，你没看过就真的不知道，哪怕只是瞄一眼，那理解起来就快多了。
+    基本上来说是这样的：一旦某条要被发送的数据诞生了（你想给别人说“hello”），它就会被第一个协议（这里假设是TFTP协议）包裹了一个新的头部（很少有包裹到尾部），然后这一整个东西（TFTP头部+“hello”）将又会被下一个协议给包裹一个头部（比如说下一个是UDP协议，那么数据包就变成了（UDP头部+TFTP头部+“hello”），然后这一整个东西又要被下一个协议包裹一个头部（这里假设就是IP协议），那数据包现在就成了（IP头部+UDP头部+TFTP头部+“hello”），最终这坨东西被硬件设备（例如：物理网卡）包裹一个Ethernet头部，接着才会被放在网络上传输。最终形式是这样：[Ethernet头部 + IP头部 + UDP头部 + TFTP头部 + “hello”]。
+    当另一端的主机接收到这个数据包时，一开始是硬件设备（例如也是物理网卡）先剥离Ethernet头部交给内核，然后内核按顺序分别剥离IP头部和UDP头部，交给TFTP程序（一般是一个进程），接着TFTP程序剥离TFTP头部后就得到了最开始对面想传送的消息“hello”。（作者这里说得非常透彻，IP和UDP是在运行在内核中的，最后才把纯粹的数据交给应用层）
+    有了上面这些知识来做陪衬，我们终于可以开始引入被很多人喷的网络分层模型（Layered Network Model，也叫做“ISO/OSI”）。这个网络模型描述了一个功能完整的网络系统，相对其他网络模型来说，这个模型有很多功能性优点。打个比方，通过这个模型，你可以在不用关心数据在物理上究竟是如何被传输的前提下来编写sockets应用程序。在物理上，数据可能是通过串口传输，或者AUI传输，这些都你可以不用关心，因为这套系统的底层协议会为你做这些。事实上，真实的网络拓扑结构对于使用socket的程序猿来说是透明的。（虽然说透明，但是最好是做到知其然且知其所以然，这样会更好！所以这也是本端存在的意义）
+    话不多说，我接下来将向你展示整个模型的层次细节，为了网络课的考试，请记住这些：
+    *Application  （应用层）
+    *Presentation （表现层）
+    *Session      （会话层）
+    *Transport    （传输层）
+    *Network      （网络层）
+    *Data Link（数据链路层）
+    *Physical     （物理层）
+    这里说的物理层是硬件设备（串口，以太网卡，等等）。而应用层离物理层的距离你可以试着想象一下，所谓的应用层就是用户和网络交互的那个地方。
+    现在来说，这个网络模型已经发展得非常庞大了，你可以把它当成《汽车维修指南》来使用（大概可能是太庞大，太复杂以至于不太好用，我也不知道在外国人眼里《汽车维修指南》有什么潜在意思）。
+    对于Unix系统来说，其实存在一个始终如一的网络模型，它也是分层式的。
+    *Application Layer           （应用层）     （telnet，ftp，等等）
+    *Host-to-Host Transport Layer（端到端传输层）（TCP协议和UDP协议）
+    *Internet Layer              （Internet层） （IP协议和路由方式）
+    *Network Access Layer        （网络接入层）  （以太网，wi-fi网或者其他）
+    在目前的情况下，你几乎可以看到这些逻辑层和原始数据的封装步骤之间的对应关系了。
+    想知道要封装一个简单的数据包要做多少工作吗？呃，看起来你不得不使用cat命令来查看这些数据的头部里面到底写着什么了。当然，我是开玩笑的。对于stream sockets来说，其实你所需要做的全部工作仅仅是调用send()把数据传出去而已。对于datagram sockets来说，也只需要调用sendto()而已。内核已经帮你构建好了传输层和Internet层，硬件设备也已经构建好了网络接入层。现代科技啊！碉堡了！
+    结束我们对于网络原理的窥见吧。呃，我好像忘记告诉你关于路由的事情了。好吧，路由其实就是——呃，我其实根本没打算讨论它。路由器会查看下层协议传上来的每一个数据包的IP头部，然后查询路由表，然后就...呃，你要真的关心这些细节，那就查阅IP协议的RFC文档吧（URL是：http://tools.ietf.org/html/rtf791）。你根本不会去学习IP协议？呵呵，你不还是好好的活着嘛！（最好是阅读本书中提到的RFC文档，尽管枯燥，可能还是英文的，但是我保证，读完肯定不后悔）
+
+3. IP地址，结构体以及数据再加工
+    我们将要做点儿改变了，要开始谈论一些代码了。（之前说了这么多，并没有设计如何编程，纯理论而已）
+    但是一开始呢我还是先别谈代码。首先，我想稍微对IP地址和端口进行一下讨论，以至于我们可以有点儿概念。然后我们将讨论sockets的API，关于它们如何存储和操作IP地址和其他一些数据。
+3.1. IP地址，IPv4和IPv6
+    很久很久以前，那时候Ben Kenobi仍然被称作Obi Wan Kenobi，当时存在一个叫做Internet Protocol Version 4的网络和路由系统（因为IP协议就是干网络和路由的工作的），简称IPv4。它其中定义了一种由4个字节组成的地址（这也是这个地址被称作“IP地址”的原因了，因为在IP协议里面定义的），通常被写成“点分十进制”样式，例如：192.0.2.111。
+    你应该在很多地方都看到过它了。
+    事实上，所有的Internet上的网站都是使用IPv4。
+    那时候大家使用IPv4，都用得很爽。直到有一天，有部分人，比如说Vint Cerf（详见http://en.wikipedia.org/wiki/Vinto_Cerf）给所有人发出了一个警告：IPv4的地址就快被我们用完了！！
+    （同时也启示了大家，IPv4的繁荣昌盛和末日到来），Vint Cerf也被认为是Internet之父！所以我毫不怀疑他的断言！
+    IP地址即将被用完？怎么可能啊？我想说，起码有几十亿个IP地址啊（4个字节），未必这世上真有数十亿台主机？
+    呃，真的有这么多！！！
+    其实在最开始的时候，只有少数几台主机而已，那时候大家都认为数十亿是一个不可思议的大数字，一些大型组织机构曾经非常慷慨的分配过上百万个IP地址来给他们自己使用。（例如：Xerox，MIT，Ford，HP，IBM，GE，AT&T，以及一些稍小的公司，比如苹果公司（呃，苹果现在可不是所谓的小公司了））
+    如果不是当意识到这个危机后，采取了一些措施手段来遏制，我们可能早就把IPv4地址用光了，但那也只是权宜之计。
+    但是到了现在，我们生活在一个几乎每样东西都拥有IP地址的时代，每一台电脑，每一台计算器，每一台手机，甚至是我家的狗，等等。
+    正是由于这种原因，IPv6诞生了。为了不让使用下一个IP协议版本的人再次抱怨“我早就告诉过你，多弄点儿地址！”诸如此类的，于是乎，IP协议的下一个进化版本就必须拥有足够多的IP地址。虽然Vint Cerf的肉体已经死亡，但是他的思想将永垂不朽，其实他可能已经存在于某些高智能程序中了，例如ELIZA（详见http://en.wikipedia.org/wiki/ELIZA）。
+    我不知道我说的这些给了你什么启示。
+    至少，我们需要更多的地址。不仅仅是两倍于IPv4而已，也不仅仅是数十亿倍而已，最终的结果是2的128次方个理论上的IP地址。
+    你可能会问，“Beej，你没忽悠我吧？我有各种原因来拒绝相信这么大的数字。”好吧，你可能认为32位和128位之间的差距听起来没有多大，只是相差96位而已，是嚒？但是你想想，32位就可以代表4百亿个（2的32次方），那128位就是（2的128次方啊，那得多大啊，天呐）。几乎可以代表整个宇宙间的星星了。
+    请忘记之前说过的IPv4地址的“点分十进制”书写格式法吧，现在我们有了一种新的写法，叫“十六进制表示法”（我也不知道如何翻译更准确），就是每两个字节之间用英文冒号隔开，你懂得，一个字节有由两个十六进制数表示，像这样：
+2001:0db8:c9d2:aee5:73e3:934a:a5ae:9551。
+    如果你碰到某个IP地址，它其中包含很多零，你可以把它缩起来写，高位的0可以不写，并且两个冒号全是零，那你就别写了，举个例子吧：
+2001:0db8:c9d2:0012:0000:0000:0000:0051 <-> 2001:db8:c9d2:12::51
+2001:0db8:ab00:0000:0000:0000:0000:0000 <-> 2001:db8:ab00::
+0000:0000:0000:0000:0000:0000:0000:0001 <-> ::1
+    这几个例子中的IPv6地址是是两者互相等价的。
+    IPv6地址::1是环回地址，跟IPv4中的127.0.0.1是一个意思，都表示“这个主机正在良好运行IP协议”。
+    最后，你可能会想到，应该要有一种兼容IPv4地址的IPv6地址（大部分协议、标准、架构都遵循向前兼容的准则，通俗点儿说就是新版本一定要兼容老版本），如果你愿意，可以这样来做，以至于达到兼容IPv4地址的目的。比如IPv4地址：192.0.2.33，在IPv6地址里面表示为：::ffff:192.0.2.33，公式大概就是IPv6 <-> ::ffff:IPv4。
+3.1.1. 子网
+    因为一些组织的原因，大部分时候为了简便，经常把从IP地质第一位开始，到某一位打止，这一段位数称为IP地址的网络部分，而剩下的就被认为是主机部分。
+    举例说明，在IPv4中，假设你有一个IP地址：192.0.2.12，你可以假设前三块（就是192.0.2）是网络部分，最后一块是主机部分。换句话说，这个IP地址就代表在192.0.2.0的网络中的第12号主机了。
+    说点对于现在来说算是有点儿过时的知识吧。准备好了吗？开始了！很久以前，那会儿子网是分类的，而不是想今天这样，想用几位作为网络部分，就可以用几位。那会儿是以第一块，第二块和第三块分别分成三类，作为网络部分的。那相应的，主机部分就分别对应，拥有后三段，后两段和后一段。如果运气好，能拥有一个只适用第一块作为网络部分的网络地址，那么就意味着，你拥有24位的主机部分了。这种网络被称为A类地址网络。相应的就有B类、C类了。（这三类地址的网络拥有的主机数量一般要减去2，因为最小和最大一般都是保留的）
+    现在你应该就明白了，A类地址的网络数量不多，B类地址的网络数量更多，C类地址的网络数量非常多。
+    IP地址的网络部分是依靠一个叫做“子网掩码”的数字来描述的，子网掩码就是一长串连续的数字1，数字1的个数就是子网掩码的长度。把当前的IP地址和子网掩码做“按位与”操作，结果就是当前的网络部分了，也叫网段，显然，剩下的就是你在当前网段的主机号了。举个例子：假设有个“255.255.255.0”的子网掩码，展开就是“11111111.11111111.11111111.00000000”，再假设你当前的IP地址是“192.0.2.12”，那么把这两者按位与，结果就是“192.0.2.0”，你所在的网段就是“192.0.2.0”，你的主机号就是12。
+    不幸的是上述这种方案对于最终Internet的需求却满足不了。C类网络其实非常容易被用完，更不用问，最终A类网络也会被用完的。请注意，子网掩码的长度是可以任意的（当然得在32以内啊，IPv4地址的总长度才32），不局限于8、16、24位。举例来说，子网掩码还可以是这样的“255.255.255.252”，这是一个30位长的网络，余下的2位作为主机部分，也就是只能供4台主机使用，00,01,10,11。（一定要记得，子网掩码是一串连续的数字1，后面跟着一串连续的数字0，不能是这样“111110100000000...”）
+    虽说子网掩码可以任意长度，但是使用“点分十进制”风格的子网掩码会让人无法直接感觉出它的长度，例如“255.192.0.0”，这种子网掩码无法让人一眼看出来究竟是多长。所以一种新的书写方式应运而生，你只需要在IP地址的后面加上一个斜杠，再斜杠后面加上子网掩码的长度即可，像这样：“192.0.2.12/30”。
+    如果是IPv6的话，也可以这样，例如：“2001:db8::/32”，或者“2001:db8:5413:4028::9db9/64”。
+3.1.2. 端口号
+    如果你记性很好的话，应该会记得我前面提到的那个分层式网络模型，它把Internet层是从运输层分离下来的。
+    事实上，除了IP地址（被IP层使用）之外，还有另一种所谓的“地址”被TCP（stream sockets）和UDP（datagram sockets）使用，TCP和UDP是互相独立的，也就是被传输层使用，它就叫做端口号。它本质上是一个16位的二进制数字，也就是两个字节长。（请注意，TCP的端口号和UDP的端口号是互不影响的，为什么呢？从最开始的数据包封装格式来看，IP层往上走，就会有两种分支，TCP或者UDP，所以只能说TCP和UDP很凑巧的使用了同一种格式的“地址”，都称为端口号。
+    试着这样理解，把IP地址想象成一个酒店的街道地址，然后把端口号想象成内部的房间号，这是一个很恰当的比方。说不定下一次我会举个汽车工业方面的例子。
+    假如说，你的主机接收到了邮件服务和网页服务两种不同的数据包，既然发送到你这台主机上，数据包中IP头部内肯定是填写的同一个IP地址，那么要如何区分这个数据包究竟是关于邮件服务的，还是网页服务的呢？（显然，通过IP地址肯定区分不出来）
+    好吧，告诉你一个秘密，也是一个事实。在Internet上，针对不同的众所周知的网络服务，我们都给它赋予了一个特定的端口号（言下之意就是非众所周知的网络服务并没有一个特定的端口号）。如果你使用的是Unix系统，你可以在“/etc/services”文件中查询到它，或者也可以在Big IANA Port List（详见：http://www.iana.org/assignments/port-numbers）里面查到。不妨告诉你，HTTP（the web）服务是80端口，telnet服务是23端口，SMTP是25端口，游戏DOOM使用端口666，等等。为了以示区别，通常小于1024的端口号是系统保留部分，给大众服务专用，而其他的端口号（1024 ~ 65535），各软件开发者可以自行使用。
+3.2. 字节顺序（字节序）
+    一直以来，对于字节的顺序，是有两种格式的，后来却发现，一种简直就是残废，另一种非常健壮。
+    虽然说得有点夸张，但是其中的一种确实比另一种好！
+    其实我想告诉你，你的主机可能一直是以一种反序的方式来存储数据的。没人必须得告诉你。
+    事实就是在Internet的世界里面，几乎每个人都已经认为，如果你想表示一个双字节的十六进制数，例如“b34f”，假设把b3放在地址100里面，那么4f就应该放在101里面）。这样符合人们的常识，所以这种“大则优先”的字节顺序存储方式就叫做“Big-Endian”，中文就是大端字节序（。
+    但是呢，有一部分主机是采用的相反的方式，几乎所有名字中含有Intel或者Intel兼容的处理器，他们都是采用的这种反方式（小则优先）存储多字节的，这种方式被称为“Little-Endian”，即小端字节序。
+    为什么介绍这两种呢？因为更符合人们常识的大端字节序也更符合咱们TCP/IP网络模型的设计需要，所以TCP/IP采用的就是大端字节序，也可以成为“Network Byte Order”，即网络字节序。
+    这个问题你想过没？你的主机存储字节的顺序跟你的处理器有关系，假如你是Intel 80x86的处理器，那主机字节序就是小端字节序；那如果另一个人的主机是Motorola 68k的处理器，那主机字节序就是大端字节序；那还有PowerPC的处理器，...诸如此类的，那么某台主机字节序就依赖于该主机的处理器架构了。
+    那么基于上述情况，你每一次封装数据包，或者填充结构体，你都必须保证你的双字节和四字节的数字符合网络字节序（为什么单字节数字不用考虑字节序呢？因为只有一个字节，根本不存在所谓的字节顺序）。在你不知道当前主机字节序的前提下应该如何做到这些呢？
+    好消息是，你可以用这个办法。你总是假设你的主机字节序不符合网络字节序，当你要发送一个数字出去的时候（包括单字节和多字节情况），每次都使用某个特定的函数来把这个数字从主机字节序转换成网络字节序，然后由这个函数来决定是否真的要进行转换（如果主机字节序符合网络字节序，那函数就不用做什么）。那么这样你编写的代码就可以运行在各种不同字节序的处理器的主机上了。
+    其实也只有两种数字需要执行转换：短的双字节数（short）和长的四字节数（long）。这些函数对于unsigned类型的变量也适用。打个比方，你要把一个双字节数从主机字节序转换之网络字节序。那就是“h”代表主机host，“to”表示转换至，“n”表示网络network，最后“s”表示双字节short，合起来就是“htons()”，（读作“Host TO Network Short”）。
+    然后利用“h/n” + “to” + “h/n” + “s/l”这些元素进行组合，就会有四种结果
+    htons() host to network short 双字节的数 从 主机字节序 转 网络字节序
+    htonl() host to network long  四字节的数 从 主机字节序 转 网络字节序
+    ntohs() network to host short 双字节的数 从 网络字节序 转 主机字节序
+    ntohl() network to host long  四字节的数 从 网络字节序 转 主机字节序
+    为什么是四种，不是2x2x2=8种呢？因为下面四种是无意义的
+    #htohs() host to host short 
+    #htohl() host to host long
+    #ntons() network to network short
+    #ntonl() network to network long 
+    这样解释一遍，是不是觉得太简单了？
+    基本来说，你总是会在一个数字发送到网络上之前，把它转成网络字节序；并且在收到一个数据包的时候，先转成主机字节序，然后再使用。
+    我不知道64位变量会如何，如果你想知道例如浮点数是如何处理的，请查阅下文中的Serialization那一段，很下面了。
+    本书中的所提到的数字，除非我特殊说明，都假设为主机字节序，请注意！！！
+3.3. 数据结构
+    终于说到这儿了！是时候说点儿关于编程的东西了！在这一段里面，我将掩盖socket接口中大部分数据类型的具体细节，除非我认为这些细节有必要展示出来我才会告诉你。（作者这样做很明智，因为一开始就上细节，很多新手看着看着就晕了。讲解一个庞大的东西，其实最主要的是框架性的东西，了解清楚了框架，细节可以慢慢磨）
+    从容易的讲起：socket描述符。它其实就是int类型的，真的真的就是一个普通的int类型。
+    呃，是不是事情开始变得有点儿古怪了？别急，和我一起读完再说。
+    第一个真正的数据结构——struct addrinfo。这个结构体是较新的发明，它被用于准备好socket地址结构体为后续使用。它也可以用于查询主机名和服务名。当我们得知他的真实用途之后它才会更加理解它，但是现在我们仅仅只需要知道，当我们需要创建一个链接的时候，第一个就得使用addrinfo。
+struct addrinfo {
+    int              ai_flags;     // AI_PASSIVE, AI_CANONNAME, ETC.
+    int              ai_family;    // AF_INET, AF_INET6, AF_UNSPEC
+    int              ai_socktype;  // SOCK_STREAM, SOCK_DGRAM
+    int              ai_protocol;  // use 0 for "any"
+    size_t           ai_addrlen;   // size of ai_addr in bytes
+    struct sockaddr *ai_addr;      // struct sockaddr_in or _in6
+    char            *ai_canonname; // full canonical hostname
+    
+    struct addrinfo *ai_next;      // linked list, next node
+};
+    你可以对这个结构体的部分成员进行设置，然后调用getaddrinfo()函数。它会返回一个链表，表中会的数据就是你需要的。
+    比如你可以把ai_family设置成IPv4或者IPv6，或者不设置，等同于AF_UNSPEC，意思是随便哪种协议族都行。这样就你的代码就可以做到与IP协议版本无关。
+    请注意到，ai_next返回的是一个链表，ai_next指向的是链表中的下一个元素——原来结果集不止一个结果！我将会使用结果集中的第一个结果，但是你可以根据不同的业务需求来使用不同的元素，我也不是全用。
+    你还可以看到addrinfo结构体中的ai_addr指针指向一个struct sockaddr，我们从这开始，来了解一个IP地址结构体的全貌！
+    你不要去填充结构体，所有你需要做的操作只是调用getaddrinfo()函数，让它来帮你填充这个结构体。然后你只会在需要取出这些结构体里面的成员的值的时候才不得不去窥见一下其内部的细节，下面我展示一下它的细节。
+    还有一点，在struct addrinfo这个结构体被发明之前，所有的代码都是靠手动来包装的。以至于你将在这本书的老版本里面看到一大堆潦草的关于IPv4的代码，你懂的。（意思是时代在变化，作者之前写这本书的时候还没有addrinfo这个结构体，后来在本书的新版本中才会有addrinfo，在没有addrinfo的年代，IPv4的代码是惨不忍睹的）
+    有些结构体是IPv4的，另一些是IPv6的，还有一些又是两者通用的。我会标记好哪些结构体属于哪个协议版本。
+    总之，struct sockaddr可以存储多种类型的sockets的信息。（已知的有IPv4的，IPv6的，可能还有别的，只是你不知道并且作者也没提及而已）
+    struct sockaddr {
+        unsigned short sa_family; // address family, AF_xxx
+        char           sa_data[14]; // 14 bytes of protocol address
+    };
+    （上面的sa_data[14]的注释为什么是14位协议地址呢？可以这样理解，不同的协议所用的地址形式不同，例如IPv4就是使用4字节的IPv4地址加上2字节的端口号再加上一些其他信息，来构成所谓的协议地址，那如果换一种，IPv6呢？可能就是别的形式了）
+    sa_family的值有很多选择，但是在本书中，它将只可能会是AF_INET（代表IPv4）或者AF_INET6（代表IPv6）。sa_data包含的是socket的终点地址和端口号。
+    手动的来填充sa_data[14]是非常不明智的！
+    为了解决这个问题，程序猿们为专门使用IPv4的时候，创造了一种与sockaddr类似但是更好用的结构体：struct sockaddr_in（in代表Internet）。
+    这一点你得知道，一个指向struct sockaddr_in类型的指针是可以被cast（以后都译成强制转换）成指向struct sockaddr指针类型的，反之亦可。所以，即使connect()要求的参数是struct sockaddr*，你仍然可以在平常使用struct sockaddr_in，然后再最后调用connect()的时候再把它强制转换成struct sockaddr就行了。
+    // IPv4专用的，IPv6使用的是 struct sockaddr_in6
+    struct sockaddr_in {
+        short int          sin_family;  // Address family, AF_INET
+        unsigned short int sin_port;    // Port number
+        struct in_addr     sin_addr;    // Internet address
+        unsigned char      sin_zero[8]; // Same size as struct sockaddr
+    }
+    这个结构体使得填充sockaddr更加容易了。请注意sin_zero只是为了填充长度以达到sockaddr的长度而已，所以应该使用memset()函数把sin_zero设置成0。还有，这里的sin_family对应sockaddr结构体中的sa_family，所以应该被设置为“AF_INET”。最后一点，sin_port在发送的之前必须使用htons()转换成网络字节序（因为sockaddr_in所有成员里面，就只有sin_port是非单字节的，也只有非单字节的变量才存在字节序的问题，请注意字符串形式的变量尽管不止一个字节，但是不存在字节序，因为它是一个字节翻译成一个数字，而short int是两个字节翻译成一个数字）
+    在往深处挖一下！你看到的是sin_addr成员是一个struct in_addr的结构体变量，那struct in_addr又是什么呢？好吧，让我们一起来见证奇迹吧！
+    //IPv4专用的，IPv6使用的是 struct in6_addr
+    struct in_addr {
+        uint32_t s_addr; // 其实这就是一个int（4字节）
+    };
+    天呐，它曾经不是结构体，而是共同体（union），但是在如今已经不复存在了，多么伟大的优化啊。如果你声明了一个叫做ina的sockaddr_in的结构体，那么ina.sin_addr.s_addr就对应一个4字节的IP地址（是网络字节序的）。请注意即使你的系统还在使用天杀的共用体in_addr，而不是结构体in_addr，你仍然可以通过使用#define的宏定义方式来把共用体转换成4字节的IP地址，就像我上面做的那样。（我不知道作者指的是哪个）
+    那在IPv6下是怎么样的呢？跟IPv4很相似：
+    // IPv6专用的，IPv4使用的是struct sockaddr_in和struct in_addr
+    struct sockaddr_in6 {
+        u_int16_t sin6_family;     // address family, AF_INET6
+        u_int16_t sin6_port;       // port number, Network Byte Order
+        u_int32_t sin6_flowinfo;   // IPv6 flow information
+        struct in6_addr sin6_addr; // IPv6 address
+        u_int32_t sin6_scope_id;   // Scope ID
+    }
+    struct in6_addr {
+        unsigned char s6_addr[16]; // IPv6 address
+    };
+    请注意，IPv6也有IPv6格式的地址和端口号，就想IPv4一样有IPv4格式的地址和端口号。
+    我暂时还不会讨论sin6_flowinfo和sin6_scope_id，因为这还才开始...不急。
+    最后再说一点，其实还有另一种数据结构，也就是struct sockaddr_storage，它被设计的足够大，可以装下IPv4和IPv6的结构体。（有时候你不能预先知道该如何填充你的sockaddr，到底是IPv4还是IPv6，那么就可以使用它来填充，然后再强制转换成你想要的格式，对于sockaddr来说，它只是更大一点而已）
+    struct sockaddr_storage {
+        sa_family_t ss_family; // address family
+        // all this is padding, implementation specific, ignore it:
+        char    __ss_pad1[_SS_PAD1SIZE];
+        int64_t __ss_align;
+        char    __ss_pad2[_SS_PAD2SIZE];
+    };
+    有一点很重要，就是ss_family，如果你填写的是AF_INET就强转为sockaddr_in，如果填写的是AF_INET6就强转为sockaddr_in6。
+3.4. IP地址的两种格式
+    幸运的是，已经有一系列函数，当你需要填充、解析IP地址的时候，可以用它们来使得这些工作更加容易，而不是手动的去用“<<”为操作符来操作IP地址。
+    首先，定义一个struct sockaddr_in ina的变量，假设你想把IP地址，假设是“10.12.110.57”或者“2001:db8:63b3:1::3490”，填入ina变量，这时你可以使用inet_pton()函数，根据你指定的AF_INET或者AF_INET6，它将会把一个点分十进制格式的IP地址转换成struct in_addr或者struct in6_addr的格式。“pton”代表“presentation to network”，描述转网络格式，或者也可以理解它为“printable to network”，可打印转网络格式，如果你觉得后者更有助于记忆的话。
+    举个例子吧：
+    struct sockaddr_in  sa;  // IPv4
+    struct sockaddr_in6 sa6; // IPv6
+    inet_pton(AF_INET,  "192.0.2.1",             &(sa.sin_addr)); // IPv4 把IP地址转成网络格式，存储在sa.sin_addr里
+    inet_pton(AF_INET6, "2001:db8:63b3:1::3490", &(sa6.sin6_addr)); // IPv6
+    在以前，大家都是使用inet_addr()函数或者inet_aton()函数来做这些转换工作，但是现在这些函数已经过时了，不适用于IPv6。
+    上面的代码没有加入容错处理，所以并不健壮。inet_pton()返回-1表示出错，返回0表示待转换的字符串形式的IP地址不对，返回1才表示成功。
+    现在你可以把字符串形式的IP地址在转换成二进制表示法了，那反过来要如何做呢？很简单，用inet_ntop()函数就可以了。    
+    // IPv4专用
+    char ip4[INET_ADDRSTRLEN]; // space to hold the IPv4 string
+    struct sockaddr_in sa;     // pretend this is loaded with something
+
+    inet_ntop(AF_INET, &(sa.sin_addr), ip4, INET_ADDRSTRLEN);
+    printf("The IPv4 address is: %s\n", ip4);
+    // IPv6专用
+    char ip6[INET6_ADDRSTRLEN]; //
+    struct sockaddr_in6 sa6;
+    
+    inet_ntop(AF_INET6, &(sa6.sin6_addr), ip6, INET6_ADDRSTRLEN);
+    printf("The IPv6 address is: %s\n", ip6);
+    当你调用inet_ntop()函数的时候，你需要传入struct in_addr形式的IP地址，然后函数会把它转换成字符串形式的IP地址存入ip，有2个很好用的宏，分别表示IPv4和IPv6中IP地址的最大长度：INET_ADDRSTRLEN和INET6_ADDRSTRLEN。
+    再次提示一下，以前做这个事情是用的inet_ntoa()函数，很明显，它也是过时了，不使用IPv6。
+    总结一下：
+    inet_ntop() -> in_addr转字符串 <- inet_ntoa()（已过时）
+    inet_pton() -> 字符串转in_addr <- inet_aton()（已过时）
+    最后一点，这些函数只适用于点分十进制的IP地址，并不适用于主机名或者域名，例如“www.example.com”。如果碰到主机名或者域名的情况，你将会使用getaddrinfo()来处理它，稍后会看到的。
+3.4.1. 私有网络（专网）
+    很多地方的网络都有一个防火墙，用来在Internet中隐藏自身网络以达到保护自己的目的。通常，这个防火墙通过使用一个叫做Network Address Translation（NAT）手段，来把“内部”的IP地址转换成“外部”的IP地址，换句话说就是把私有IP翻译成公网IP。
+    别紧张，让我们来看看它究竟干了些什么！
+    呃，其实也没什么，作为一个初学者，你根本不需要关心NAT，因为它对于你来说暂时是透明的。一旦你看到的这些网络让你感到困惑的时候，我将会告诉你隐藏在这些防火墙后面的东西。
+    举个例子，我家里的网络有个防火墙，我有两个网络服务商（在大陆就是电信公司或者移动公司）分配给我的静态的IPv4地址，但是我家的网络里面有7台主机。靠，那怎么可能？如果两台电脑同时使用一个IP地址，那接收到的数据怎么知道应该转发到哪一台主机呢？
+    答案就是：他们并不是用同样的IP地址，他们使用的是不同的私有网络地址，私有网络地址有24,000,000个，并且他们全部都归我使用！对于其他人，他们也是这样认为的。下面看看这到底怎么回事：
+    现在如果我登录到某台远程的主机上去，它就告诉我，我登陆所使用的地址是网络服务商提供的“192.0.2.33”。但是我查看我的本地主机的IP地址，却发现是“10.0.0.5”。是谁在做这个转换呢？对了，就是防火墙！！就是它在做NAT。
+    10.x.x.x就是一部分保留的网络地址中的一个，它们只能被用在完全离线的网络里面，或者被用在具有防火墙的网络里面。你可以通过查阅RFC 1918（详见：http://tools.ietf.org/html/rfc1918）文档来了解你可以使用的私有网络地址的数量，以及它的详细信息，最常见的就是10.x.x.x，192.168.x.x，其中x代表0-255。少部分不常见的是172.y.x.x，其中y代表16-31.
+    其实位于带有NAT防火墙内部的网络并不是一定得使用保留地址（私有地址），但是通常都这样做。
+    呃，“192.0.2.33”这个IP地址纯属虚构啊，它不是我真是id外网地址，这本书也是纯属虚构啊，哈哈（作者意思是告诉大家，别傻傻的去访问“192.0.2.33”啦）
+    从某种意义上来说，IPv6也拥有私有网络地址。它们是以fdxx:开头的（可能将来会是fcxx:），具体得看RFC 4193（详见：http://tools.ietf.org/html/rfc4193）。一般来说，NAT和IPv6不混用，你想想，理论上你有了那么多用不尽的地址，你还需要用NAT吗？但是如果你想自己来分配IP地址，并且并不对外路由，这种情况下就可以混用NAT和IPv6了！
+4. 从IPv4到IPv6
+    有的读者会说，其实我只是想知道如何修改我的代码才能让它从IPv4到IPv6，快点儿告诉我！！！
+    下面注意听吧！
+    1.首先，尝试使用getaddrinfo()函数来代替手动地来获取所有关于struct sockaddr的信息。这将让你的代码拥有IP协议版本无关性，并且可以省略随后的几个步骤。
+    2.代码中的所有的涉及到IP协议版本的并且写死了的地方，请试着把他们封装在一个辅助函数当中。
+    3.把AF_INET改成AF_INET。
+    4.把PF_INET改成PF_INET6。
+    5.把INADDR_ANY修改成“in6addr_any”的时候有点儿不同，应该这样改：
+    struct sockaddr_in sa;
+    struct sockaddr_in6 sa6;
+    
+    sa.sin_addr.s_addr = INADDR_ANY; // IPv4
+    sa6.sin6_addr = in6addr_any;
+    还有，宏IN6ADDR_ANY_INIT可以被用来作为一个初始化值，当struct in6_addr被定义的时候，像这样：
+    struct in6_addr ia6 = IN6ADDR_ANY_INIT;
+    6.用struct sockaddr_in6代替struct sockaddr_in，还有其他类似的地方，参见前面讲过的“数据结构”那个章节。sockaddr_in6中没有sin6_zero成员，切记！
+    7.用struct in6_addr代替struct in_addr。
+    8.使用inet_pton()函数代替inet_aton()和inet_addr()；
+    9.使用inet_ntop()函数代替inet_ntoa()；
+    10.使用更高级的getaddrinfo()函数代替gethostbyname()函数；
+    11.使用更高级的getnameinfo()函数代替gethostbyaddr()；（尽管gethostbyaddr()函数在IPv6中仍然保留可用）
+    12.INADDR_BROADCAST不在可用，使用IPv6的multicast代替。
+    没了。
+5. 系统调用
+    在这一章里面，我们将深入了解一些系统调用和一些库函数调用，这些调用允许你使用Unix平台或者其他任何支持sockets API的平台的网络功能。当你调用这些函数的时候，内核将接管一切，然后帮你自动的完成所有的工作。（socket API可以理解为一套标准接口，不同的系统，不同的平台，它底层的内部实现可能就不同，但是有个要求就是封装给上层（用户态）调用的sockets API必须符合标准，这样你的代码就能做到一次编写，到处编译，最理想的是不做任何修改，就能换个平台编译运行，尽管这样的情况很少，但是实际的修改其实也比较微小）
+    其实让大多数人困惑的地方在于应该按照何种顺序调用这些函数。你可能也发现了，就是这个原因，导致man手册的作用微乎其微。（作者真是说到我心坎儿里了！要不怎么说这本书写得好呢！！！man手册只能详细解释每一个函数的作用，返回值等等，但是互相之间的调用顺序却无能为力）。那么为了帮助大家走出那个可怕的窘境，我会按照这样的顺序来一个一个讲解这些系统调用，就是你的程序里将要按照什么样的顺序调用，我就按照这个顺序来一一讲解，基本上能和你的需求达成一致！
+    下面我们将会面对一些示例代码，与之相对应的，你可能需要一点牛奶和饼干（身体是革命的本钱），一些胆量，更需要一些勇气，那么我保证你将在会像Jon Postel附体般，纵横于Internet中，光芒四射！！！（Jon Postel简介：http://en.wikipedia.org/wiki/Jon_Postel，发明Internet功臣之一，作者希望大家犹如春哥附体般，在Internet的战场上战无不胜，所向披靡！让我们开始吧！！）
+    （简短的提示一下，下面的许多代码片段并不包含必要的容错处理，并且假设调用getaddrinfo()函数时都能成功并且返回的链表中至少有一个可用的节点，所以只是把它们当作一个模型就可以了！）
+5.1. getaddrinfo()——准备起航！
+    它是一个非常强悍的函数，有许多的选项可以设置，但是用法却极其简单。它帮助你初始化一些你稍后会需要的数据结构。
+    插入一点历史知识：过去是一个叫做gethostbyname()的函数来做DNS查询的。然后再把得到的信息手动赋值给struct sockaddr_in，接着你才能使用这些信息。
+    但是这些都不复存在了，谢天谢地。（注意，即便你要写一个同时兼容IPv4和IPv6的程序，也不应该使用gethostbyname()函数了）。在现在这个时代，你有getaddrinfo()函数可用了，它不仅可以做查询DNS和service name的操作，还可以帮你自动填充一些你需要使用的结构体（比如sockaddr_in或者sockaddr_in6）。
+    让我们目睹一下它的芳容吧！
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netdb.h>
+    int getaddrinfo(const char *node, // e.g. "www.example.com" or IP
+                    const char *service, // e.g. "http" or port number
+                    const struct addrinfo *hints, 
+                    struct addrinfo **res);
+    你只要给这个函数传入3个参数，然后它就会给于你一个指针，它指向一个链表，也就是参数res，代表results。
+    参数node是待连接的主机名或者IP地址。
+    参数service，可以是一个端口号，像“80”，也可以是一个特定的服务名（必须是IANA Port List可以找到的，参见http:www.iana.org/assignments/port-numbers，或者Unix主机上的/etc/services文件中定义的），像“http”、“ftp”、“telnet”、“smtp”这样的。
+    最后，参数hints指向一个struct addrinfo，并且已经被你填上一些相关的信息。（hints代表暗示，hints就想一个筛选器，你可以在里面填上一些过滤条件，那么最后得到的res中的节点就都是符合hints所设置的条件的节点，如果hints为空，即不筛选，那么res的节点就会很多）。
+    下面是一个简单的调用，假设你是一个想要监听你主机的IP，然后端口是3490的服务器程序。请注意，getaddrinfo()函数并不做一些真正的监听工作，也不做网络初始化之类的操作，它仅仅只返回一些结构体（res的节点一般不止一个），我们稍后一定会用到。
+    int status;
+    struct addrinfo hints;
+    struct addrinfo *serviinfo; // will point to the results
+    
+    memset(&hints, 0, sizeof hints); // make sure the struct is empty （作者用sizeof的时候不喜欢用括号，并无错，大家要习惯啊）
+    hints.ai_family = AF_UNSPEC;     // 这里设置为“不指定”，意思是IPv4或者IPv6都行
+    hints.ai_socktype = SOCK_STREAM; // TCP stream sockets，意思是要筛选流式的sockets，其他类型的不要出现在res中
+    hints.ai_flags = AI_PASSIVE; // 自动帮我把我的IP填入res的IP地址成员中
+
+    if ((status = getaddrinfo(NULL, "3490", &hints, &servinfo)) != 0) {
+        fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+        exit(1);
+    }
+    // 如果程序能运行到这行，说明servinfo现在就会指向一个拥有1个或者更多struct addrinfo类型的节点的链表
+    // ...你可以开始利用得到的servinfo中的节点的信息做点有意义的事情了！
+    freeaddrinfo(servinfo); // 释放链表，这个函数很好，不用你手动去调用free了，它封装好了。所以大家写一个链表，也要写一个配套的释放函数
+    注意到我把ai_family赋值为AF_UNSPEC，因此意味着我不关心IP协议的版本。如果你只要其中的某一个，你也可以设置为AF_INET或者AF_INET6。
+    还有，你看我设置了AI_PASSIVE这个标志位；这样做是为了告诉getaddrinfo()函数帮我把我的本地主机的IP地址复制给socket结构体。这样做的好处就是你不会留下硬代码（什么是硬代码？就是兼容性较差的代码），兼容IPv4和IPv6。（如果你不这样做，你也可以给getaddrinfo()函数的第一个参数传入一个指定的IP地址，我的代码中是传入的NULL。）
+    接下来就可以调用了。如果getaddrinfo返回非零值，就表示有错误发生了。我们可以利用gai_strerror()函数把错误原因给打印出来。如果一切都顺利的情况下，servinfo将会指向一个链表的头部，其中就包含了一个或者多个我们稍后将会用到的信息，（等下要给struct sockaddr赋值）
+    最后，当我们不再使用getaddrinfo()函数分配给我们的链表后，我们应该调用freeaddrinfo()函数来释放这些内存。
+    下面举个实例，假设你是客户端，你想连接一个特定的服务器，比方说“www.example.net”，端口号是3490。再次强调一下，这些并没有真正的去连接服务器，而只是获取我们稍后要用到的信息，以此来填充sockaddr结构体。
+    int status;
+    struct addrinfo hints;
+    struct addrinfo *servinfo; // 指向返回的结果集
+    
+    memset(&hints, 0, sizeof hints); // 清零
+    hints.ai_family = AF_UNSPEC; // 不关心IP协议的版本
+    hints.ai_socktype = SOCK_STREAM; // 筛选出TCP stream sockets
+    
+    // 获取一下关于www.example.net:3490的信息，稍后会用到的，拭目以待
+    status = getaddrinfo("www.example.net", "3490", &hints, &servinfo);
+    
+    // servinfo现在指向了结果集，里面应该有1个或者更多的addrinfo类型的节点。
+    // 省略
+    我一直都在强调，servinfo这个链表携带了所有关于某个特定地址的相关。让我们试着写一个demo程序来看看这些信息到底是什么东西！下面这个小程序（源代码在：http://beej.us/guide/bgnet/examples/showip.c）将打印关于你指定的主机名（或者IP地址）的一切信息：
+    /*
+    ** showip.c -- show IP addresses for a host given on the command line
+    */
+    
+    #include <stdio.h>
+    #include <string.h>
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netdb.h>
+    #include <arpa/inet.h>
+    #include <netinet/in.h>
+    
+    int main(int argc, char *argv[])
+    {
+        struct addrinfo hints, *res, *p;
+        int status;
+        char ipstr[INET6_ADDRSTRLEN];
+    
+        if (argc != 2) {
+            fprintf(stderr, "usage: show ip hostname\n");
+            return 1;
+        }
+        memset(&hints, 0 sizeof hints);
+        hints.ai_family = AF_UNSPEC; // AF_INET or AF_INET6 to force version
+        hints.ai_socktype = SOCK_STREAM;
+        
+        if ((status = getaddrinfo(argv[1], NULL, &hints, &res)) != 0) {
+            fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
+            return 2;
+        }
+        
+        printf("IP address for %s:\n\n", argv[1]);
+        
+        for(p = res; p != NULL; p = p->ai_next) {
+            void *addr;
+            char *ipver;
+            
+            // get the pointer to the address itself,
+            // different fields in IPv4 and IPv6
+            if (p->ai_family == AF_INET) { // IPv4
+                struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
+                addr = &(ipv4->sin_addr);
+                ipver = "IPv4";
+            } else { // IPv6
+                struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)p->ai_addr;
+                addr = &(ipv6->sin6_addr);
+                ipver = "IPv6";
+            }
+
+            // convert the IP to a string and print it:
+            inet_ntop(p->ai_family, addr, ipstr, sizeof ipstr);
+            printf("  %s: %s\n", ipver, ipstr);
+        }
+        freeaddrinfo(res); // free the linked list
+        return 0;
+    }
+    如你所见，不管你在命令行界面传入什么，代码都接受然后调用getaddrinfo()函数，然后返回res指向一个已填充好的链表，然后遍历该表，打印这些内容，或者拿去干别的用。
+    我们不得不根据节点中IP协议版本的值来使用两种不同的sockaddr的结构体，这样很丑陋，很抱歉。但是我也没找到一个更好的方法来解决。
+    试着简单的运行一下！（作者没教大家如何编译，貌似也不用什么特殊手段，就gcc ./showip.c -Wall -g就行了，不过这样得到的是a.out不是作者演示的showip，但是这都不重要啦）
+    $ showip www.example.net
+    IP addresses for www.example.net:
+    
+    IPv4: 192.0.2.88
+
+    $ showip ipv6.example.com
+    IP addresses for ipv6.example.com:
+    
+    IPv4: 192.0.2.101
+    IPv6: 2001:db8:8c00:22::171
+    现在我们将用刚才从getaddrinfo()得到的结果来传给其他的socket函数了。终极目标是建立一个网络链接！继续往下看吧！
+    （这也是作者一直强调的，这一章节只是一个起航！接下来才是好戏上演！）
+5.2. socket()函数——获取文件描述符！
+    我想我不得不说说socket()这个系统调用（如何区分系统调用和普通函数调用？（我建议看看这条http://stackoverflow.com/questions/572942/whats-the-difference-between-c-system-calls-and-c-library-routines））了，下面是细节：
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    int socket(int domain, int type, int protocol);
+    虽然给出了socket()函数的声明，但是这些参数到底是什么呢？这里的参数使得你可以选择返回哪种socket描述符（IPv4还是IPv6，stream还是datagram，TCP还是UDP）
+    以前，人们会在这里写死这些参数，你当然也可以这么做（domain就写PF_INET或者PF_INET6，type就写SOCK_STREAM或者SOCK_DGRAM，protocol就写0或者其他特定的合适的协议。更或者你可以调用getprotobyname()来查询你想要的协议，“tcp”或者“udp”）
+    （这里的PF_INET与你初始化sin_family的时候用到的AF_INET非常类似。事实上，这两个宏对应的值是相等的，很多的程序猿调用socket()函数的时候回传入AF_INET来代替PF_INET。呃，下面我要讲个故事了，你准备点儿饼干和牛奶吧。
+    // 我在翻译这里的时候卡了很久，并且请教了GJH童鞋，在她的耐心帮助下，我悟出了一些我的理解
+
+    很久以前，设计者原先是这样设计的：
+    一个协议族应该支持多个地址族，简而言之就是一个PF_XXX支持多个AF_XXX。
+    这一点可以从Linux的头文件“sys/socket.h”印证！
+    #define AF_INET 2
+    ...
+    #define PF_INET AF_INET
+    即，现实情况是先定义的AF_XXX，然后定义的PF_XXX与AF_XXX相等，理想情况下是可以像下面这样的：
+    #define AF_INET 2
+    ...
+    #define PF_INET 4 // PF_XXX和AF_XXX的值并不一定相等
+    即，多个PF可以支持同一个AF。
+    
+    但是，这种设计并没有最后付诸实践，也就是，不存在一个支持多地址族的协议族！
+    目前为止，一个协议族只支持一个地址族！
+    虽然没付诸实现，但是为了保留之前这种设计思想，以便后人再继续实现，就区分了PF和AF，规定在使用sockaddr的时候用AF_XXX，而在使用socket()系统调用的时候使用PF。当然你知道，目前为止，PF_XXX的值和AF_XXX的值是相等的！
+    如果你在目前的代码中混用PF和AF，虽然不会出错，但是并不能保证很多年以后还是对的。
+
+一个地址族（什么叫地址族，AF_INET、AF_X25、AF_BLUETOOTH这些，都分别是一个地址族）应该要支持多个协议，而这里的多个协议可能是分别属于不同的协议族的（什么叫协议族，PF_INET、PF_X25、PF_BLUETOOTH这些，都分别是一个协议族），但是呢，最后在实现的这个理念的时候并没有这样做，（最后的实际的做法是一个地址族，能够支持的协议只能属于同一个协议族，不能属于不同的协议族。这相当于把地址族和协议族绑在一块儿了），但是为了留下地址族和协议族这两个概念，于是就把AF_xxx和PF_xxx分别用两种不同的宏来表示，但是它们本质上的数值是相等的。
+
+    不说那些了，其实你真正想要做的只是把从getaddrinfo()获得到的结果，装进socket()里，像这样：
+    int s;
+    struct addrinfo hints, *res;
+    
+    // do the lookup
+    // 假设我们已经填写了hints
+    getaddrinfo("www.example.com", "http", &hints, &res);
+    
+    // 再次强调，你应该在这里加上容错措施！
+    // 并且你应该遍历res来查找一个有用的节点，而不是本文中总是假设第一个节点就是想要的那个。
+    // 如果想要看到一个真正意义上的demo程序，请看客户端/服务器那个章节（意思那个代码比较正规）
+
+    s = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    socket()函数会返回给你一个socket描述符，你会把它用在随后的系统调用函数里，返回-1表示出错。全局的变量errno会被设置为错误代码（详见errno的man手册，它会告诉你关于errno在多线程的情况下的详细情况）
+    那这个socket有什么好的地方呢？其实对于它本身来说没什么用，就返回一个socket描述符，但是接下来，它会被用在更多的系统调用里。
+5.3. bind()——用哪个端口
+    一旦你获取到一个socket描述符之后，你必须得把那个socket与一个你本地主机上的端口绑定在一起。（通常情况下，如果你打算使用listen()来监听某个端口上发来的连接）。被绑定的端口号是被内核用来与收到的数据包中的端口号做匹配的，然后内核才知道要把这个数据包放入与这个端口绑定的进程的socket描述符。如果你只打算进行connect()操作（这种情况往往你是客户端进程，不是服务器进程），这样bind()就没有必要了（如果你非要用bind()也可以，在不用bind()就去connect()的情况下，内核会自动给你分配一个端口号，待商榷，TODO）
+    下面是bind()系统调用更多简介：
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    
+    int bind(int sockfd, struct sockaddr *my_addr, int addrlen);
+    sockfd是由之前的socket()函数返回的。my_addr是一个指针，指向了包含了你主机的地址的sockaddr结构体（为什么我不说是IP地址和端口号？？假设你用的是其他地址族呢？那么就不I叫IP地址了，叫xx地址；并且端口号也不一定存在了），但是在这里，用的是IP地址和端口。addrlen就是那个地址的长度。
+    让我们看看一个例子吧，把socket和本地主机的端口3490绑定在一块儿：
+    struct addrinfo hints, *res;
+    int sockfd
+    // 先调用getaddrinfo()函数来获取一些信息
+    
+    memset(&hints, 0 , sizeof hints);
+    hints.ai_family = AF_UNSPEC; // 不关心地址族究竟是哪一个
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE; // fill in my IP for me
+
+    getaddrinfo(NULL, "3490", &hints, &res);
+
+    // 获取一个socket描述符
+    sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    
+    // 把sockfd绑定到我们传给getaddrinfo()函数的那个端口
+    bind(sockfd, res->ai_addr, res->ai_addrlen);
+    
+    通过使用AI_PASSIVE标志，我们告诉程序，我们要绑定的是运行这个程序的主机的IP地址，如果你想要绑定一个其他的指定的本地IP地址，不要使用AI_PASSIVE标志位，并且把那个IP地址作为第一个参数传给getaddrinfo();
+    bind()函数返回-1表示错误，并且会把错误代码设置给errno的。
+    大部分的较老的代码中，在调用bind()函数之前，都会手动填充struct sockaddr_in。显然，这是IPv4的做法。但是你在IPv6下也依然可以这么做（先手动填充struct sockaddr_in6，再调用bind()函数）。但是有一种更加简便的方式，就是用getaddrinfo()函数。一般来说，较老的代码看起来像于下面这样子：
+    // 这是老代码的式样 ！！！！
+    int sockfd;
+    struct sockaddr_in my_addr;
+    sockfd = socket(PF_INET, SOCK_STREAM, 0);
+    
+    my_addr.sin_family = AF_INET;
+    my_addr.sin_port = htons(MYPORT); // 一定要记得转哦！
+    my_addr.sin_addr.s_addr = inet_addr("10.12.110.57");
+    memset(my_addr.sin_zero, '\0', sizeof my_addr.sin_zero);
+
+    bind(sockfd, (struct sockaddr*)&my_addr, sizeof my_addr);
+    
+    在上面的代码中，s_addr也可以赋值为INADDR_ANY，来表示你想要绑定你本地IP地址（就想前面的AI_PASSIVE标志位一样）。IPv6版本下的INADDR_ANY是一个全局变量叫in6addr_any，你也可以把它赋值给struct sockaddr_in6的sin6_addr成员变量。（其实还有一个IN6ADDR_ANY_INIT的宏也可以用）。
+    另一个要小心的事就是在调用bind()函数的时候，不要使用1024以内的端口号，因为他们是保留的，除非你是超户（超级用户：superuser）！1024以上，你可以随意使用，别超过65535就行。（但是如果某段口号已经被其他程序正在占用，那你将暂时无法使用那个端口）
+    有时候，你可能会发现，当你试着重新运行一个服务端程序的时候，被提示bind()失败，显示“Address already in use.”，这是什么意思呢？好吧，真相就是可能还有少数socket链接在内核中挂起，他们依然占用着这个端口。你可以等一会儿，等这些socket被清掉（大概一分钟吧），或者或者增加一些代码，使得可以重新使用这个端口，像这样：
+    int yes = 1;
+    // char yes = 1; // Solaris people use this
+
+    // lose the pesky "Address already in use" error message
+    if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
+        perror("setsockopt");
+        exit(1);
+    }
+
+    最后一小点儿需要注意的是：如果你使用connect()去连接一个远程服务器，你又并不关心你在本地使用的端口号，这种情况下你就不需要去调用bind()了（就想telnet程序，你只关心远程的主机的端口），你只需要简单的调用connect()就可以了，当然也得检查一下这个socket描述符是不是未绑定状态的。
+5.4. connect()——嘿，哥们儿！
+    让我们来做个假设，你就是一个telnet程序。你的用户命令你来获取一个socket描述符。你顺应指令然后调用了socket()函数。下一步你 多用户告诉你向“10.12.110.57”主机上的“23”端口（标准的telnet程序使用的端口，注意啊，小于1024，系统专用的）发起连接，那么此时此刻你会怎么做？
+    你很幸运，telnet程序。因为你正在阅读connect()这个章节，这一章节将告诉你如何来链接一个远程主机。那么好好读吧！
+    connect()函数的细节：
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    
+    int connect(int sockfd, struct sockaddr *serv_addr, int addrlen);
+    sockfd就是socket()返回的描述符了，serv_addr就是填充了远程主机的地址信息的struct sockaddr了，addrlen自然就死活服务器地址结构体的长度了。
+    serv_addr的所有信息，都可以从getaddrinfo()返回的连表中收集到。
+    是不是觉得有点儿感觉了？（就是前面说的一大堆关于getaddrinfo()的东西终于发挥用处了）虽然我不知道你是不是悟出一点什么东西了，但是我还是假设你已经悟出点儿什么了！因为我下面就要将一些真正的好东西了。
+    下面我们看看一个示例代码，与“www.example.com”的“3490”端口建立一个socket链接：
+    struct addrinfo hints, *res;
+    int sockfd;
+    
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.socktype = SOCK_STREAM; // 要建立连接，那当然要用stream类型的socket了
+    
+    getaddrinfo("www.example.com", "3490", &hints, &res); // 相当于去获取www.example.com:3490的一些信息，并且填充在res的结构体里面
+
+    // 获取一个socket，假设res的第一个节点就是我们需要的，一定要记得这一点假设条件
+    sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    
+    // 发起连接
+    connect(sockfd, res->ai_addr, res->ai_addrlen); //得益于getaddrinfo()的好处，我们不需要再自己手动填充了，也不需要关心IP版本了
+
+    再次强调，老版本的程序代码要手动填充struct sockaddr_in，然后传给connect()。你今天依然可以那么做。你可以看看bind()那一张相似的一个强调，就在上面那章。
+    一定要检查connect()的返回值——返回-1表示错误，然后也会设置errno的值。
+    还有，注意到，我们没有调用bind()函数。通常来说，我们不关心我们本地的端口号使用的是哪一个，我们仅仅关心我们即将发起连接的远程的端口号。内核会自动为我们选择一个本地的端口号，这个端口当然是目前没人用的，当然，如果你说本地的端口号全部被占完了该怎么办？当然会返回一个错误码啦，然后告诉你本地端口被占完了，呃，这种情况很少出现啦。接着，远程的那个主机会自动获取到我们发过去的这些信息的，我们不用关心。（编写客户端程序，你当然得假设服务器程序完好的存在，并且正在运行正常）
+5.5. listen()——有人找我吗？
+    现在我们换个角度来看看。如果假设你不想去对远程主机发起一个连接，而你只是想等待进来的连接，然后以某种方式处理它们。这个流程分为两个步骤：第一，你先要调用listen()函数，然后调用accept()函数（在下一个章节中会说它的）
+    调用listen()函数的操作真心简单，但是还是需要稍微解释说明一下。
+    int listen(int sockfd, int backlog);
+    sockfd还是socket()函数返回的描述符啦（已经说过N遍了吧）。backlog是等待进入队列中允许的连接的个数，这是什么意思？等待进入的请求连接一直会在等待进入的队列里，知道你调用了accept()函数来接受它们，backlog就是一个上限数字，表示等待队列中最多能有多少连接。大多数系统默认的上限是20；你也可以把它设置成5或者10；
+    再次强调（貌似作者很喜欢强调，我也很喜欢这种风格，前后贯穿，不至于脱节），listen()返回-1表示出错，然后设置errno。
+    呃，你应该可以想象到，在我们调用listen()函数之前，得先调用bind()函数，那样服务程序才运行在某个特定端口上。（你必须得预先告诉将会发起请求的客户端程序，你用的那个特定的端口是多少，否则别人咋个连呢？）如果你打算监听到来的连接请求，那么系统调用函数们的顺序大概是这样：
+    getaddrinfo(); // 填充sockaddr，
+    socket(); // 获得一个socket，参数使用getaddrinfo返回的信息
+    bind(); // 把刚才获得的socket描述符和某个IP和端口绑定，强调一下，一旦谈到IP地址，一定要携带端口才行，IP地址只能找到主机，端口才是最终和你通信的进程的标识符
+    listen(); // 开始监听某个socket描述符上的请求
+    /* accept()会在这儿出现，下一章节会讲到 */
+    我就不多说了，上面这端代码的意思显而易见。（下一章节accept的代码会更加完整的）。这一整套流程中，真正复杂的地方其实是调用accept()函数...别紧张。
+
+5.6. accept()——您好，感谢您访问端口3490
+    准备好！！
+    accept()函数非常古怪！！！事实是这样的：有个人在远方试图通过调用connect()函数来向你的主机上的某个端口发起连接请求，这个端口也就是你调用listen()函数监听的。它们的这些请求连接会被放置在请求队列里，等待你使用accept()函数来接受它们。你调用accept()函数就相当于告诉内核，给我一个队伍中的连接请求吧，我来接受它。那么accept()函数就会为这条链接返回一个崭新的socket描述符，通过这个socket描述符就可以处理这条链接了。突然之间你有了两个socket描述符了。原来的那个socket描述符仍然会监听新来的请求连接，而新的这个socket描述符最后就可以被用来send()和recv()了，我们就快了！！！
+    细节如下：
+    #include <sys/type.h>
+    #include <sys/socket.h>
+    
+    int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+    
+    sockfd就是listen()中的那个sockfd，够简单吧？addr一般是一个指向本地struct sockaddr_storage的指针。addr参数将会告诉你请求连接来自哪个主机的哪个端口。addrlen是一个本地的整型变量，并且在传给accept()函数前，设其值为sizeof(struct sockaddr_storage)。这样accept()就会写入addr指针中，不超过addrlen个字节（意思是不会出现内存越界写操作）。如果写入的字节数还小于addrlen个字节，accpet函数就会改变addrlen的值，这也让你在解析addr的时候不会手足无措。
+    显而易见，accept()返回-1表示错误，然后也设置errno。（已经说了N+1遍了）
+    像之前一样，上份儿代码：
+    #include <string.h>
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    
+    #define MYPORT "3490" // 监听用的端口号
+    #define BACKLOG 10 // 请求等待队列的最大长度
+    
+    int main(void)
+    {
+        struct sockaddr_storage their_addr; // 存储发来请求的主机的信息
+        socklen_t addr_size;
+        struct addrinfo hints, *res;
+        int sockfd, new_fd;
+
+        // 一定要记得添加容错处理的代码
+        memset(&hints, 0, sizeof hints);
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_flags = AI_PASSIVE;
+
+        getaddrinfo(NULL, MYPORT, &hints, &res);
+        
+        // 获取一个socket
+        sockfd = socket(res->ai_family, res->socktype, res->ai_protocol);
+        bind(sockfd, res->ai_addr, res->ai_addrlen);
+        listen(sockfd, BACKLOG);
+
+        addr_size = sizeof their_addr;
+        
+        new_fd = accept(sockfd, (struct sockaddr*)&their_addr, &addr_size);
+
+        // 准备来使用new_fd这个socket描述符进行通信了！
+
+    接下来我们就是使用new_fd来进行send()函数和recv()函数调用了。如果你只打算建立一条连接而已，那么你就可以调用close()函数来关闭正在监听的那个旧socket描述符了，这样可以阻止更多的请求连接。
+
+5.7. send()和recv()——聊聊吧！
+    这两个函数时用来基于stream socket或者已连接的datagram socket（注意看，这里是指的已连接！！）的通信的使用的。如果你想要使用常见的无连接的datagram socket，你需要看看后面关于sendto()和recvfrom()章节。
+    send()函数详细：
+    int send(int sockfd, const void *msg, int len, int flags);
+    sockfd要么是socket()返回的描述符，要么是accept()返回的。msg是一串你想发送的数据，len是它的字节长度数。flags一般设置成0就好了。（更多关于flags的信息请参见man手册）
+    示例代码：
+    char *msg = "Beej was here!";
+    int len, bytes_sent;
+    ...
+    len = strlen(msg);
+    bytes_sent = send(sockfd, msg, len, 0);
+    ...
+
+    send()函数的返回值有点儿像printf的返回值，send()会返回它真正发送出去的字节数——意思你调用send()的时候有10个字节，但是它只发送了8个字节出去，还有2个没成功发送，为什么会出现这种情况呢？有时候，你吐了一大串数据给它，但是它刚好hold不住这么大一坨数据。它的想法是尽量多的发送它能够发送的数据出去，如果剩了一点没发送完，调用者还会调用它把剩下的发出去。所以，如果你发现send()函数的返回值不等于（可能小于、可能等于）你传入的msg的长度，也就是len，那么剩下的数据还发不发，就看调用者的意思了。（一般情况当然要发啦~~~）好消息是：如果一个包的长度比较小（比如小于1K，举个例子），一般它都会一次性发完。最后，返回-1当然就表示出错了，然后会设置errno。
+    有人问，第一次还没发送完，那我又得调用一次send()函数，那如果第二次没发送完，是不是又得调用一次？答案是：如果你坚持要把这些数据发出去，你应该不断的调用发送，直到把所有数据发送完才行。
+    它的兄弟recv()函数长这样：
+    int recv(int sockfd, void *buf, int len, int flags);
+    sockfd跟send()的一样，buf就是是调用者事先已经开辟好的一段缓存区，len是这块缓存区的最大（这保证了recv不会往buf中写入超过len个字节，同样是为了避免内存越界写操作），flags用0代替即可（具体请参考recv()的man手册吧）
+    recv()的返回值：要么是-1，表示出错了。要么就是它真正读取到的数据的长度，也就是真正写入buf中的字符串的长度。你猜recv()会返回0吗？呃，它真的可以返回0，什么情况呢？只有这种情况：这条链接的远方的另一端已经关掉这条链接了，返回0就是为了告诉你这件事，然后你如何做，那就是你自己的事儿了。
+    啊，是不是很简单啊！！我想是吧！现在你可以在stream类型的socket上自由的发送和接收数据了，我次奥，你现在也是一个Unix网络程序猿了！！！
+
+5.8. sendto()和recvfrom()——聊聊吧，DGRAM的形式
+    我已经学会了在stream socket上通信了，但是在无连接的datagram socket上如何通信呢？别急，盆友，这不是什么大问题，听我慢慢道来！
+    考虑到datagram socket是无连接的，也就是没有连接到一个远程的主机，那假设我们要发送数据前，应该指定哪些必要信息呢？哈哈！我想你应该猜到了，那就是远程主机的地址信息啊，是吧，不然数据往哪发啊！
+    int sendto(int sockfd, const void *msg, int len, unsgined int flags, const struct sockaddr *to, socklen_t tolen);
+    （译者注，当我读到这里，我深深的被作者的讲述能力所折服，我从未这么清晰的看透socket编程。man手册固然好，够全面，但是缺乏人性，不得不承认！）
+    如你所见，这个函数对于send()函数来说，无非只是增加了两个参数，来指定目的主机的地址信息。to就是指向struct sockaddr的指针，里面存着目的主机的地址信息，tolen是其长度，（因为to可能是sockaddr_in或者sockaddr_in6或者sockaddr_storage，所以tolen是很有必要的）。socklen_t其本质上是int，tolen可以简单的设置成sizeof *to或者sizeof(struct sockaddr_storage)。
+    要获取目的主机的地址信息，你要么就是从getaddrinfo()中获取的，要么就是先调用了recvfrom()（还没说，但是你应该能猜到，recvfrom不仅能获取传来的数据，还能知道是谁传给我的），如果前两者都不奏效，不好意思，你只能手动填写struct sockaddr *to了。
+    与send()类似，正常情况下sendto()也是返回它真正发出去的字节数，返回-1表示出错。
+    同样的，recv()和recvfrom()非常相似。recvfrom()的原型如下：
+    int recvfrom(int sockfd, void *buf, int len, unsigned flags, struct sockaddr *from, int *fromlen);
+    比起recv()来说，额外的那两个参数就是来告诉你，buf中的数据是从哪个主机来的。from中会携带源主机的地址信息，fromlen在用之前先要设置为from的长度，这样能保证recvfrom()不会出现内存越界写操作，而且函数返回时会重新设置fromlen的值，设为from中被写入的真实长度，也可以帮助你来解析from。
+    recvfrom()返回真正收到的数据的字节数，意思说我可能传入一个2k长的buf，但是它只往buf中写了1k，所以我能知道它到底收到了多少字节数据。
+    你或许有个疑问，为什么我们不用struct sockaddr_in，而是用的struct sockaddr_storage。因为正如你所愿，你不想你的代码不能同时兼容IPv4和IPv6（或者更多的IP版本，甚至不是IP是xxxxP），于是用sockaddr_storage来抽象这一层，其实也是因为sockaddr_storage比它们两者都大（或者等于最大）。
+    你或许还有个问题，为什么struct sockaddr本身不是足够大，达到可以兼容所有address呢？我们总是要使用struct sockaddr_storage，但在最后的时候又强转为struct sockaddr，你们这些高手难道没有感觉这个操作很没道理，并且很冗余嘛！！唉，答案好简单，就是struct sockaddr当初设计的时候搞小了，结果现在不够大了，那你要我怎么办，只能弄个新的呗，那就是struct sockaddr_storage。那为什么不把struct sockaddr改大一点儿？改大一点会造成其他已有的代码不兼容啊，总之你要记住一个理念，你的扩展尽量不能造成已有的东西出现不兼容的现象，那么你原始的设计越好，那之后出这种问题的情况就越少，但是代码是死的，时代在变换，你想IPv4当初的设计者哪会想得到几十年后的今天IP地址就不够用了，是不是，不能怪他们吧，我们只能在后天用兼容的手段来弥补他们的“失误”。（敬Internet的发明者们！）
+    记住，如果你调用connect()函数来连接一个datagram socket，简便起见，你可以就用send()和recv()来进行你所有的传输数据操作。这个socket本身依然是datagram socket，封装格式依然是UDP的，只是socket的接口会自动帮你填上目的和原始的主机信息。（真好！但是我不建议这样使用，人要靠自己！不要依赖于socket的接口，一旦在某个特殊的平台上出问题，让你查都不好查）。
+
+5.9. close()和shutdown()——滚粗！
+    呃，你已经持续一整天地发送和接收数据了，因为你受够了这些，所以你准备在你的socket描述符上断开这条链接了。很简单，因为socket描述符也是描述符，这个之前说过，对吧，所以你可以简单的调用close()来完成你的操作：
+    close(sockfd);
+    就像上面这样。
+    这样就释放了这个sockfd，那么谁都无法再在这个sockfd上进行读写数据的操作了。任何试图读写这个socket的远程主机都会受到一个错误提示。
+    呃，万一你想掌握多一点关于如何关掉socket，你可以换一下，使用shutdown()函数。它允许你在单个方向上来切断链接，也可以像close()一样，双方向的切断链接。原型如下：
+    int shutdown(int sockfd, int how);
+    sockfd就不用说了吧~。how有如下几个选项：
+    0    不再接受数据了
+    1    不再发送数据了
+    2    不再发送，也不再接受数据了，跟close()函数效果一样。
+    shutdown()返回0表示成功进行某种形式的切断，返回-1表示错误，同时设置errno。
+    如果你屈尊使用shutdown()来关闭无连接形式的datagram socket（有点儿杀鸡用牛刀的味儿），结果就是这个socket既不能再使用send()也不能再使用recv()了。（你还记得之前说的嘛？如果你对你的datagram socket使用了connect()，那么这个datagram socket是可以使用send()和recv()的）。
+    有一点很重要，shutdown()并不是真正的释放一个文件描述符——它只是改变了一个文件描述符的可用性。要想释放一个socket描述符，还得调用close()才行（不知道调用shutdown(sockfd, 2);是不是能达到close(sockfd);效果。答案是可以的，根据stackoverflow的一个帖子，这两者功效相当，但是前者更好，因为当你shutdown以后，并不代表这个描述符真的被OS给回收了，因为基于TCP的socket描述符还在进行一个TIME_WAIT的等待，如果TIME_WAIT到时了，还没数据来，就真的被OS回收了）
+    （Windows程序猿注意啦，你应该用closesocket()，而不是close()。）
+5.10. getpeername()——你是谁？
+    这个函数很简单！
+    因为它太过于简单了，我当初不想把它写成一个章节来介绍它，呃，无论如何，它现在就是一个章节了。
+    getpeername()会告诉你已连接的stream socket的另一头是谁。
+    原型：
+    #include <sys/socket.h>
+    int getpeername(int sockfd, struct sockaddr *addr, int *addrlen);
+    sockfd肯定就是那个已连接的stream socket啦，addr就是等会getpeername将会告诉你的另一头的主机的信息啦，addrlen在用之前得设置成struct sockaddr *addr的长度，之后会被getpeername设置成真实的长度，其实你读了这么多，你应该悟出点什么了，struct sockaddr *addr和int *addrlen是一对好基友，有你必有我。
+    该函数返回-1表示出错，然后设置errno。
+    一旦你有了对方的地址信息，你就可以使用inet_ntop()，getnameinfo()，或者gethostbyaddr()函数来获取他们更多的信息了。这不包括别人的登陆信息啊~~但是也可以搞到，前提是那台主机运行了一个用作识别的deamon服务。但是本书中不讨论这个了，具体请参见RFC1413，地址是：http://itool.ietf.org/html/rfc1413。
+
+5.11. gethostname()——我是谁？
+    这个函数比上一章节中说的getpeername()更简单。它返回我的的主机名，也就是运行这个程序的主机的网络识别名。得到这个名字以后，就可以使用gethostbyname()函数，通过名字来获取想对应的IP地址。下面那个章节会说的，别急。
+    原型：
+    #include <unistd.h>
+    int gethostname(char *hostname, size_t size);
+    显然，hostname指向一段可用的内存空间，size就是这段可用空间的字节数。
+    （你看这里size传入的不是size的地址，是size的值，所以并不像之前的，函数在返回时会设置你的size值，函数只是保证最多指望这块儿内存写这么多，并不会告诉你真正写入hostname内存区的字节数）。
+    最后一次说：该函数返回0表示成功，返回-1表示错误，并设置errno。
+6. C-S模型的背景
+    朋友，整个互联网都是基于C-S模型的通信方式。网络上的所有的通信要么是客户端发消息给服务端，要么就是服务端发消息给客户端。以telnet程序来举例。当你使用telnet试图来连接一个远程主机的23端口时（此刻你是客户端），那么远程主机上的一个叫做telnetd的程序将被唤醒（这个就是服务端）。telnetd会处理所有的进来的telnet请求连接，然后反馈给客户端一个登陆的提示，等等。
+    
+    客户端和服务端之间的信息交流方式可以总结成上面这个图。
+    请注意，C-S两者之间可以使用SOCK_STREAM或者SOCK_DGRAM亦或者任何其他的方式为通信基础方式（只要保护C、S两者使用的方式相同即可，这就很想语言，你说英语，我说汉语，咱们之间还说个球，谁都听不懂谁。）几个经典的例子，telnet/telnetd就是一对，ftp/ftpd也是，Firefox/Apache也是（你看出来了没？）。每次你在客户端使用ftp程序，那么那个远程主机上，就会有一个ftpd来为你服务。（当然，如果说远程主机上没有运行ftpd怎么办？很明显，没人理你。所以一般都假设服务端的程序是7X24X365可用的）。
+    通常，一个主机上只会运行一个服务端程序，那个服务端程序会使用fork()的手段来同时应对处理多个客户端程序。基本的套路是这样的：服务程序一直处于等待状态（就是listen()之后的状态），然后来一个连接就accept()一个连接，接着调用fork()函数，产生一个子进程来和这个新来的客户端连接进行通信交流等等。这也是我们的下面要给出的服务端示例代码的模型！
+6.1. 一个简单的流式服务器
+    简单起见，这个服务器只做一件事儿，就是发送“Hello, World!\n”给stream socket的另一头（客户端）。测试这个服务程序的方法也超简单，就是让服务程序在一个shell窗口保持运行，在另一个shell窗口使用telnet命令，像这样：
+    $ telnet remotehostname 3490
+    上面的remotehostname是你运行服务程序的主机的主机名。
+    服务端程序代码如下：（加油，慢慢读，你可以的！至少译者我读完了）
+    其中会包含小部分关于多进程的知识，不懂的可以忽略，我们主要是关注整个网络方面的代码
+    /*
+    ** server.c -- a stream socket server demo
+    */
+    #include <stdio.h>
+    #include <stdlib.h>
+    #include <unistd.h>
+    #include <errno.h>
+    #include <string.h>
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <netdb.h>
+    #include <arpa/inet.h>
+    #include <sys/wait.h>
+    #include <signal.h>
+   
+    #define PORT "3490" // 监听用的端口号
+    #define BACKLOG 10  // 请求队伍上限
+   
+    void sigchld_handler(int s) //这个函数如果不懂也没关系
+    {
+        while(waitpid(-1, NULL, WNOHANG) > 0);
+    }
+   
+    // get sockaddr, IPv4 or IPv6:
+    void *get_in_addr(struct sockaddr *sa)
+    {
+        if (sa->sa_family == AF_INET) {
+            return &(((struct sockaddr_in*)sa)->sin_addr);
+        }
+   
+        return &(((struct sockaddr_in6*)sa)->sin6_addr);
+    }
+   
+    int main(void)
+    {
+        int sockfd, new_fd; // listen on sockfd, new connection on new_fd
+        struct addrinfo hints, *servinfo, *p;
+        struct sockaddr_storage their_addr; // connector's address information
+        socklen_t sin_size;
+        struct sigaction sa;
+        int yes = 1;
+        char s[INET6_ADDRSTRLEN];
+        int rv;
+   
+        memset(&hints, 0, sizeof hints);
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_flags = AI_PASSIVE;
+   
+        if ((rv = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0) {
+            fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+            return 1;
+        }
+   
+        // loop through all the results and bind to the first we can
+        for (p = servinfo; p != NULL; p = p->ai_next) {
+            if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+                perror("server: socket");
+                continue;
+            }
+   
+            if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
+                perror("setsockopt");
+                exit(1);
+            }
+   
+            if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+                close(sockfd);
+                perror("server:bind");
+                continue;
+            }
+   
+            break;
+        }
+   
+        if (p == NULL) {
+            fprintf(stderr, "server: failed to bind\n");
+            return 2;
+        }
+   
+        freeaddrinfo(servinfo); //all done with this structure
+   
+        if (listen(sockfd, BACKLOG) == -1) {
+            perror("listen");
+            exit(1);
+        }
+   
+        sa.sa_handler = sigchld_handler; // reap all dead processes
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = SA_RESTART;
+        if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+            perror("sigaction");
+            exit(1);
+        }
+   
+        printf("server: waiting for connections...\n");
+   
+        while(1) { // main accept() loop
+            sin_size = sizeof their_addr;
+            new_fd = accept(sockfd, (struct sockaddr*)&their_addr, &sin_size);
+            if (new_fd == -1) {
+                perror("accept");
+                continue;
+            }
+   
+            inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), s, sizeof s);
+            printf("server: got connection from %s\n", s);
+           
+            if (!fork()) { // this is the child process
+                close(sockfd); // child doesn't need the listener
+                if (send(new_fd, "Hello World!\n", 13, 0) == -1) {
+                    perror("send");
+                }
+                close(new_fd);
+                exit(0);
+            }
+            close(new_fd); // parent doesn't need this
+        }
+       
+        return 0;
+    }
+    如果你是那种有强迫症的人，觉得我的main()函数太大了，你可以把它分割成更多小的模块（函数），只要你觉得爽就行了，前提是别犯错了。
+    还有啊，sigaction()函数可能对于你来说不认识，也没什么问题，它的作用只是为了清除僵尸进程（什么是僵尸进程，有兴趣你可以去看看APUE这本书），如果你造成的僵尸进程太多了，你的系统管理员肯定会抓狂的。
+    其实你不仅可以使用telnet来对这个服务器程序发起请求，你还可以用下面这个简单的客户端程序发起请求。
+6.2. 一个简单的流式客户端程序
+    这个会上面的服务端程序更简单。客户端需要做的只是对你在命令行里面填入的主机名的3490端口发起请求连接，然后从服务端获取回应信息。
+    下面就是代码：
+    /*
+    ** client.c -- a stream socket client demo
+    */
+    #include <stdio.h>
+    #include <stdlib.h>
+    #include <unistd.h>
+    #include <errno.h>
+    #include <string.h>
+    #include <netdb.h>
+    #include <sys/types.h>
+    #include <netinet/in.h>
+    #include <sys/socket.h>
+    #include <arpa/inet.h>
+    #define PORT "3490" // the port client will be connecting to
+    #define MAXDATASIZE 100 // max number of bytes we can get at once
+    // get sockaddr, IPv4 or IPv6:
+    void *get_in_addr(struct sockaddr *sa)
+    {
+        if (sa->sa_family == AF_INET) {
+            return &(((struct sockaddr_in*)sa)->sin_addr);
+        }
+        return &(((struct sockaddr_in6*)sa)->sin6_addr);
+    }
+    int main(int argc, char *argv[])
+    {
+        int sockfd, numbytes; 
+        char buf[MAXDATASIZE];
+        struct addrinfo hints, *servinfo, *p;
+        int rv;
+        char s[INET6_ADDRSTRLEN];
+        if (argc != 2) {
+            fprintf(stderr,"usage: client hostname\n");
+            exit(1);
+        }
+        memset(&hints, 0, sizeof hints);
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+        if ((rv = getaddrinfo(argv[1], PORT, &hints, &servinfo)) != 0) {
+            fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+            return 1;
+        }
+        // loop through all the results and connect to the first we can
+        for(p = servinfo; p != NULL; p = p->ai_next) {
+            if ((sockfd = socket(p->ai_family, p->ai_socktype,
+                    p->ai_protocol)) == -1) {
+                perror("client: socket");
+                continue;
+            }
+            if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+                close(sockfd);
+                perror("client: connect");
+                continue;
+            }
+            break;
+        }
+        if (p == NULL) {
+            fprintf(stderr, "client: failed to connect\n");
+            return 2;
+        }
+        inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
+                s, sizeof s);
+        printf("client: connecting to %s\n", s);
+        freeaddrinfo(servinfo); // all done with this structure
+        if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
+            perror("recv");
+            exit(1);
+        }
+        buf[numbytes] = '\0';
+        printf("client: received '%s'\n",buf);
+        close(sockfd);
+        return 0;
+    }
+    请注意，如果你在server还没运行之前就运行了client，那么会得到提示：connect()函数会返回错误“Connection refused”。
+6.3. Datagram Socket
+    我们已经在sendto()和recvfrom()那一章节了解过UDP协议的datagram socket的基础知识了。所以下面我将向你展示一对简单的好基友：talker.c和listener.c。
+    listener程序会等待其运行的主机上的4950端口的数据报。talker程序会发送数据报到目的主机的4950端口。
+    代码如下：
+    /*
+    ** listener.c -- a datagram sockets "server" demo
+    */
+    #include <stdio.h>
+    #include <stdlib.h>
+    #include <unistd.h>
+    #include <errno.h>
+    #include <string.h>
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <netdb.h>
+    #define MYPORT "4950"   // the port users will be connecting to
+    #define MAXBUFLEN 100
+    // get sockaddr, IPv4 or IPv6:
+    void *get_in_addr(struct sockaddr *sa)
+    {
+        if (sa->sa_family == AF_INET) {
+            return &(((struct sockaddr_in*)sa)->sin_addr);
+        }
+        return &(((struct sockaddr_in6*)sa)->sin6_addr);
+    }
+    int main(void)
+    {
+        int sockfd;
+        struct addrinfo hints, *servinfo, *p;
+        int rv;
+        int numbytes;
+        struct sockaddr_storage their_addr;
+        char buf[MAXBUFLEN];
+        socklen_t addr_len;
+        char s[INET6_ADDRSTRLEN];
+        memset(&hints, 0, sizeof hints);
+        hints.ai_family = AF_UNSPEC; // set to AF_INET to force IPv4  
+        hints.ai_socktype = SOCK_DGRAM;
+        hints.ai_flags = AI_PASSIVE; // use my IP
+        if ((rv = getaddrinfo(NULL, MYPORT, &hints, &servinfo)) != 0) {
+            fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+            return 1;
+        }
+        // loop through all the results and bind to the first we can
+        for(p = servinfo; p != NULL; p = p->ai_next) {
+            if ((sockfd = socket(p->ai_family, p->ai_socktype,
+                    p->ai_protocol)) == -1) {
+                perror("listener: socket");
+                continue;
+            }
+            if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+                close(sockfd);
+                perror("listener: bind");
+                continue;
+            }
+            break;
+        }
+        if (p == NULL) {
+            fprintf(stderr, "listener: failed to bind socket\n");
+            return 2;
+        }
+        freeaddrinfo(servinfo);
+        printf("listener: waiting to recvfrom...\n");
+        addr_len = sizeof their_addr;
+        if ((numbytes = recvfrom(sockfd, buf, MAXBUFLEN-1 , 0,
+            (struct sockaddr *)&their_addr, &addr_len)) == -1) {
+            perror("recvfrom");
+            exit(1);
+        }
+        printf("listener: got packet from %s\n",
+            inet_ntop(their_addr.ss_family,
+                get_in_addr((struct sockaddr *)&their_addr),
+                s, sizeof s));
+        printf("listener: packet is %d bytes long\n", numbytes);
+        buf[numbytes] = '\0';
+        printf("listener: packet contains \"%s\"\n", buf);
+        close(sockfd);
+        return 0;
+    }
+    注意到，我们调用getaddrinfo()函数的时候，hints.ai_socktype用的是SOCK_DGRAM这个宏，并且整个程序中也没有调用listen()和accept()函数。这个例子是一种比较特殊的使用无连接的datagram socket的方式。
+    下面请看talker.c的源代码：
+    /*
+    ** talker.c -- a datagram "client" demo
+    */
+    #include <stdio.h>
+    #include <stdlib.h>
+    #include <unistd.h>
+    #include <errno.h>
+    #include <string.h>
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <netdb.h>
+    #define SERVERPORT "4950"   // the port users will be connecting to
+    int main(int argc, char *argv[])
+    {
+        int sockfd;
+        struct addrinfo hints, *servinfo, *p;
+        int rv;
+        int numbytes;
+        if (argc != 3) {
+            fprintf(stderr,"usage: talker hostname message\n");
+            exit(1);
+        }
+        memset(&hints, 0, sizeof hints);
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_DGRAM;
+        if ((rv = getaddrinfo(argv[1], SERVERPORT, &hints, &servinfo)) != 0) {
+            fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+            return 1;
+        }
+        // loop through all the results and make a socket
+        for(p = servinfo; p != NULL; p = p->ai_next) {
+            if ((sockfd = socket(p->ai_family, p->ai_socktype,
+                    p->ai_protocol)) == -1) {
+                perror("talker: socket");
+                continue;
+            }
+            break;
+        }
+        if (p == NULL) {
+            fprintf(stderr, "talker: failed to bind socket\n");
+            return 2;
+        }
+        if ((numbytes = sendto(sockfd, argv[2], strlen(argv[2]), 0,
+                 p->ai_addr, p->ai_addrlen)) == -1) {
+            perror("talker: sendto");
+            exit(1);
+        }
+        freeaddrinfo(servinfo);
+        printf("talker: sent %d bytes to %s\n", numbytes, argv[1]);
+        close(sockfd);
+        return 0;
+    }
+    就这么多了，很简单吧。
+    在某个主机上运行listener程序，然后再另一个程序上运行talker程序（当然，你也可以在同一个机器的不同的两个shell里面运行这两个程序），然后就观看他们是如何通信的吧，放心，没有少儿不宜的镜头，哈哈。
+    忘了告诉你，其实你这次可以不必先运行服务端！你可以先运行talker，然后talker就老老实实把你想发送的消息给发出去了，如果另一头没有服务端程序已经调用recvfrom()（调用recvfrom会进入阻塞阶段），那这些包就消失了~。记住这一点：UDP协议的datagram socket并不保证数据报一定送达。
+    这里有个例外，我之前说到过好几次了。那就是特别注意“已连接的（面向连接的）datagram socket”。打个比方说：talker程序调用connect()然后指定了一个listener的地址。从那一刻起，talker程序可能只想和那个地址进行通讯。那么这种场景下，你并非一定得使用sendto()和recvfrom()了，你可以便捷的就是用send()和recv()就可以了。（因为connect产生了连接，所以调用send()和recv()，内核会自动帮你添上目的地址和源地址的信息的）
+
+7. 稍微高端点儿的技术
+    等会儿要谈到的东西也不算太高端，但是它们又不再是那种特别基础，特别底层的东西了，就像我们前面所学的。事实上，你如果脚踏实地的走到现在这个地方来，你可以非常自信的说，我已经在Unix网络编程基础班毕业了。恭喜你了！（啪啪啪）
+    好吧，我们即将进入的是一个崭新的世界，里面充满着一些你可能想要学习的秘籍，当然是关于socket的啦~~
+    走你！
+7.1. 阻塞（zǔ sè，千万别念错了）
+    阻塞，你肯定听过！呃，但是它到底是什么来头？广义的说，阻塞有种睡眠的意思，在计算机科学这个行当里面。举点例子说说吧。你可能在运行listener程序（注意，我说的不是listen()函数）的时候发现到运行这个程序的shell窗口会一直停在那里，直到一个数据报到来（就是直到你在另一个shell窗口里面运行talker程序）。当调用recvfrom()的时候到底发生了什么鬼！真相就是当你调用recvfrom()函数的时候，还没有任何数据报发来（假设talker还没运行），自然你也收不到任何数据报，此时我就说调用recvfrom()的时候发生阻塞了，也可以说程序阻塞在recvfrom()函数里面了（就好像程序睡着了），直到有些数据报的到来，它才会被唤醒。
+    很多库函数或者系统调用函数，在被调用的时候都会出现阻塞的情况。调用accept()会阻塞，调用recv()的也会。它们可以这样去阻塞的原因是它们是被允许这样做（一般是阻塞在内核里了）。因为一开始你通过socket()系统调用来获得socket描述符的时候，内核就已经把它的某个属性设置为“阻塞式”的了。如果你不想要这样阻塞的socket描述符，你必须得在获得它之后调用fcntl()函数来改变这一属性：
+    #include <unistd.h>
+    #include <fcntl.h>
+    ...
+    sockfd = socket(PF_INET, SOCK_STREAM, 0);
+    fcntl(sockfd, F_SETFL, O_NONBLOCK); // 这里不用我说你都能看个大概意思出来，把sockfd改成非阻塞式的
+    ...
+    通过把socket描述符设置为“非阻塞式”的，你就可以更有效的通过“轮询”（poll）来从这个socket描述符获取信息了。假设你现在试图去读取一个非阻塞式的socket描述符，并且此事它又没有数据可读，那么就不会阻塞了，而是立即返回-1给你，然后设置errno，这次我告诉你errno的值回事EWOULDBLOCK。
+    一般来讲，这种形式的轮询不是个好注意。如果你让你的程序使用轮询的方式在一个socket描述符上寻找数据，你会相当浪费CPU的时间，并且这种程序设计方式已经过时了。在下面的select()函数章节中，有一种优雅的解决方案，关于检查是否可被读。
+7.2. select()——同步的I/O多路复用技术
+    这个函数看上去有点怪怪的，但是灰常有用！！！想象一下这样的场景：你是一个服务端程序，你想一边监听新来的请求连接，一边接收已存在的连接的另一端发来的数据。
+    你可能说，这还不简单？就用一个accept()加上一堆的recv()不就可以了嘛？嘿，别回答这么快！先仔细想想！假设你调用accept()的时候阻塞了肿么办？同一时间你打算如何去调用recv()呢？你又急着回答说“简单啊，用非阻塞式的socket不就又解决问题了嘛！！”。我想告诉你，没门，这样你会把CPU全占了的（就像一只专吃CPU的猪，上面已经说了，不能用轮询，效率极其低下）。
+    select()函数可以给你一种“同时监控多个sockets”的能力！你调用它，它就会告诉你哪些socket是处于可读状态的（就是这个socket上有新来的数据，或者说这个socket上还有数据没读完），哪些socket是可写状态的（我就不再重复解释了，你懂的），哪些socket处于意外状态（出事儿了），达到监控多个socket的三种状态的目的。
+    在现代的程序设计中，select()函数虽然移植性好，但却被认为是最慢的方法之一。一个可能的替代品是libevent（详见：http://www.monkey.org/~provos/libevent/）或者类似的东西。它们封装了所有的系统相关的东西，也包括获取socket推送通知。（这里得讲一下。老式的方法是轮询，不停的去问有没有数据可以读啊，有没有数据可以写啊。新式的方法是，如果有某个或者某些socket中有数据可读/写，请通知我，那我只需要在最开始的时候到你这里来注册一下，你到时候通知我就行了。那这期间的空闲时间，我可以去干别的事情。所以在后者这种模式下，CPU效率更高，并且依然可以监控多个socket。不仅在socket方面，在很多程序、软件、系统设计的时候，你都应该这样去设计）。
+    废话不多说，下面展示一下select()的语法细节：
+    #include <sys/time.h>
+    #include <sys/types.h>
+    #include <unistd.h>
+    
+    int select(int numfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
+    很明显，select可以检测三组socket，每一组检测这一组中的socket描述符的某一种状态。numfds应该被设置为所有socket描述符中值最大的那个，并且再加一（之前说过，socket描述符也是文件描述符，而文件描述符的本质就是一个整型数）。举个例子，如果你把文件描述符0和某个其他的sockfd放入了某个文件描述符集（sets），那么numfds的值就是sockfd+1了（肯定是假设这个sockfd大于0，不过事实上也是这样的，文件描述符0代表标准输入，你可以去做个实验，去打开一个文件，或者调用socket()，返回如果没出错的话，肯定大于0）。
+    当select()返回的时候，readfds会被修改，从而反映出你选择的哪些文件描述符处于可读状态。你可以使用一个很方便的宏FD_ISSET()来进行检测。
+    在继续往下学习之前，我觉得很有必要先谈谈如何操作这些集合（sets）。每一个集合都是fd_set类型的，下面的这些宏可以用在操作fd_set这种类型。
+    FD_SET  (int fd, fd_set *set); // 把fd这个文件描述符加入到set这个集合当中来
+    FD_CLR  (int fd, fd_set *set); // 把fd这个文件描述符从set这个集合中删除
+    FD_ISSET(int fd, fd_set *set); // 检查fd这个文件描述符是否在集合set中，如果在就返回true，否则就返回false
+    FD_ZERO (fd_set *set);         // 把集合set清空
+    最后介绍一下struct timeval。想象一下这个场景。大多数时候，你并不愿意一直等待别人给你发送数据。你可能每96秒就想要打印“Still Going...”在终端窗口上，即使这段时间内没有发生任何事情。这个跟时间相关的数据结构允许你来指定一个超时时间。如果时间超过了你指定的值后，select()函数还没有发现被扫描集合内的文件描述符处于可读/写状态，它就会返回，以至于你不会一直阻塞在此函数内，你可以干点儿别的事儿。（想像一下你把那个结构体设置为零的情况下会发生什么事情吧）
+    struct timeval的定义如下：
+    struct timeval {
+        int tv_sec;  // seconds 秒数
+        int tv_usec; // microseconds 微秒数
+    }
+    不用我过多解释了吧，tv_sec就是你想要等待的秒数，如果你觉得1秒钟都太长，它也提供一个更精细的微秒数供你使用，就是tv_usec了。那timeval的值就等于tv_sec + tv_usec了。微秒你知道吧，一秒钟的一百万分之一。注意哦，不是毫秒哦，别弄错了。有一点很重要，可能会发生，得看看你用的是哪种Unix系统，就是有可能在select()函数返回的时候，你当初传进去的timeout参数会被修改的，修改成原timeout的值减去调用select()函数逝去的时间，也就是还剩下多少时间，范围肯定是[0, timeout)这个区间的啦。
+    哦耶！从现在开始，我们有了一个微秒级的定时器可用了。呃，但是别指望它真的能达到那么准确的微秒级。无论你把struct timeval的值设置得多么小，假设你设置成0秒1微秒吧，你至少得等待一个Unix系统的最小时间间隔才行。这样说吧，虽然你说我只想等待1微秒，系统说好，我等会儿来检查，如果你的时间到了我就告诉你。但是系统还要忙别的事情啊，它可能过了一阵子才过来检查，然后告诉你，嘿，兄弟，你的定时器到时了，但此时你等待的时间可能就不止1微秒了，你等待了一个Unix系统的最小时间片。那你假如设置成1秒0微秒，系统说好！我等会儿来检查。过了一会儿（一个时间片）系统来检查了，发现你还没到时，于是就走了。经过很多个时间片之后，系统发现你的定时器到时了，然后就通知你。所以对于任何定时器而言，你等待的时间总是大于等于你当初设置的时间的。
+    还有些有趣的值得注意的细节：如果timeval的两个成员都设置为0，select()会立即返回，这样可以高效的轮询你的设置的文件描述符集。如果你传给timeout的值是NULL（一定要注意，这里传值为0的timeval和NULL不同），select()会进入无限阻塞状态，直到某个集合里面的文件描述符进入可读/写（也包括异常，如果你监控了的话）状态。如果你并不在乎等太久，你当然就可以在调用select()的时候传入NULL。
+    下面的代码片段的意思是设置超时时间为2.5秒，并且监控文件描述符0是否可读（就是标准输入）。
+    /*
+    ** select.c -- a select() demo
+    */
+    #include <stdio.h>
+    #include <sys/time.h>
+    #include <sys/types.h>
+    #include <unistd.h>
+    
+    #define STDIN 0 // 就是标准输入
+
+    int main(void)
+    {
+        struct timeval tv;
+        fd_set readfds;
+        
+        tv.tv_sec = 2;
+        tv.tv_usec = 500000; // 这里是五十万微秒 等于 0.5秒
+
+        FD_ZERO(&readfds);
+        FD_SET(STDIN, &readfds);
+        
+        // 不监控writefds和exceptfds
+        select(STDIN+1, &readfds, NULL, NULL, &tv);
+
+        if (FD_ISSET(STDIN, &readfds))
+            printf("A key was pressed!\n");
+        else
+            printf("Timed out.\n");
+
+        return 0;
+    }
+    友情提示，如果你用的终端窗口是有行缓冲的，如果你输入某个字符后，记得再按一下回车，否则你看到的运行结果总会是“Timed out”了。（因为带有行缓冲的终端窗口在得到标准输入的时候，系统都会先缓存着，直到缓存要满了或者遇到回车字符，才会把这些字符流真正的传给程序）
+    现在你们可能会认为，用这种方式来等待datagram socket上的数据会是一种超棒的方式——我只能说“你可能说对了！”，为什么呢？真相就是有一部分Unix系统（你知道Unix-like的系统种类繁多）可以把select()这样用，但是另一些就不可以了！如果你想要试图这样去做，那么我劝你先仔细看看你本机上的man手册上关于select()函数的那部分内容。
+    之前说了，有部分Unix-like的系统会在select()函数返回时修改timeout参数为剩下的时间，但是不是所有的Unix-like系统都这样，有些并不修改。所以如果你想要你的程序具备更高的可移植性，你最好不要依赖这个特性。（如果你非要得到逝去时间，你可以使用gettimeofday()来达到目的。我知道，gettimeofday()已经被淘汰不用了，但是我只是说这是一种可行的方法）
+    如果处于readfds集合里面的一个socket断开连接了，接下来会发生什么事情呢？在那种情况下，select()同样会返回，并且标明那个socket处于“可读”状态。然后你应该会调用recv()去读它，然后recv()函数就会返回0，那时候你就知道了“哦，这个socket已经断开了”（既可读，又读不出数据，就表示该socket断开了，记住吧）。
+    下面说个有趣的事儿，关于select()的：假设你已经调用listen()函数来监控某个socket描述符上的请求连接了，你可以通过把这个socket描述符加入readfds的手段来用select()函数监控它上面是否有新的请求连接了，是不是很酷。
+    盆友，上面说了这么多，这些仅仅只是无所不能的select()函数的概览而已。
+    应广大观众盆友的要求，我们将讲解一个更牛逼的例子来深入了解select()。与上面简单例子不同的是，下面这个例子意义重大，请一定要仔细看看源代码，然后再看看后面的解释。
+    这个程序可以说是一个多人聊天的服务端程序的基础框架（为什么说它意义重大！）。把它运行在某个shell窗口里面，然后从多个其他shell窗口里面执行“telnet hostname 9034”。当你从其中某个telnet客户端输入信息的时候，其他所有的telnet客户端都会收到！听起来是不是很鸡冻！让我们开始吧！
+
+    /*
+    ** selectserver.c -- a cheezy multiperson chat server
+    */
+    #include <stdio.h>
+    #include <stdlib.h>
+    #include <string.h>
+    #include <unistd.h>
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <netdb.h>
+    #define PORT "9034"   // port we're listening on
+    // get sockaddr, IPv4 or IPv6:
+    void *get_in_addr(struct sockaddr *sa)
+    {
+        if (sa->sa_family == AF_INET) {
+            return &(((struct sockaddr_in*)sa)->sin_addr);
+        }
+            return &(((struct sockaddr_in6*)sa)->sin6_addr);
+    }
+   
+    int main(void)
+    {
+        fd_set master;    // master file descriptor list
+        fd_set read_fds;  // temp file descriptor list for select()
+        int fdmax;        // maximum file descriptor number
+        int listener;     // listening socket descriptor
+        int newfd;        // newly accept()ed socket descriptor
+        struct sockaddr_storage remoteaddr; // client address
+        socklen_t addrlen;
+        char buf[256];    // buffer for client data
+        int nbytes;
+        char remoteIP[INET6_ADDRSTRLEN];
+        int yes=1;        // for setsockopt() SO_REUSEADDR, below
+        int i, j, rv;
+        struct addrinfo hints, *ai, *p;
+        FD_ZERO(&master);    // clear the master and temp sets
+        FD_ZERO(&read_fds);
+        // get us a socket and bind it
+        memset(&hints, 0, sizeof hints);
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_flags = AI_PASSIVE;
+        if ((rv = getaddrinfo(NULL, PORT, &hints, &ai)) != 0) {
+            fprintf(stderr, "selectserver: %s\n", gai_strerror(rv));
+            exit(1);
+        }
+       
+        for(p = ai; p != NULL; p = p->ai_next) {
+            listener = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+            if (listener < 0) {
+                continue;
+            }
+           
+            // lose the pesky "address already in use" error message
+            setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+            if (bind(listener, p->ai_addr, p->ai_addrlen) < 0) {
+                close(listener);
+                continue;
+            }
+            break;
+        }
+        // if we got here, it means we didn't get bound
+        if (p == NULL) {
+            fprintf(stderr, "selectserver: failed to bind\n");
+            exit(2);
+        }
+        freeaddrinfo(ai); // all done with this
+        // listen
+        if (listen(listener, 10) == -1) {
+            perror("listen");
+            exit(3);
+        }
+        // add the listener to the master set
+        FD_SET(listener, &master);
+        // keep track of the biggest file descriptor
+        fdmax = listener; // so far, it's this one
+        // main loop
+        for(;;) {
+            read_fds = master; // copy it
+            if (select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1) {
+                perror("select");
+                exit(4);
+            }
+            // run through the existing connections looking for data to read
+            for(i = 0; i <= fdmax; i++) {
+                if (FD_ISSET(i, &read_fds)) { // we got one!!
+                    if (i == listener) {
+                        // handle new connections
+                        addrlen = sizeof remoteaddr;
+                        newfd = accept(listener,
+                            (struct sockaddr *)&remoteaddr,
+                            &addrlen);
+                        if (newfd == -1) {
+                            perror("accept");
+                        } else {
+                            FD_SET(newfd, &master); // add to master set
+                            if (newfd > fdmax) {    // keep track of the max
+                                fdmax = newfd;
+                            }
+                            printf("selectserver: new connection from %s on "
+                                "socket %d\n",
+                                inet_ntop(remoteaddr.ss_family,
+                                    get_in_addr((struct sockaddr*)&remoteaddr),
+                                    remoteIP, INET6_ADDRSTRLEN),
+                                newfd);
+                        }
+                    } else {
+                        // handle data from a client
+                        if ((nbytes = recv(i, buf, sizeof buf, 0)) <= 0) {
+                            // got error or connection closed by client
+                            if (nbytes == 0) {
+                                // connection closed
+                                printf("selectserver: socket %d hung up\n", i);
+                            } else {
+                                perror("recv");
+                            }
+                            close(i); // bye!
+                            FD_CLR(i, &master); // remove from master set
+                        } else {
+                            // we got some data from a client
+                            for(j = 0; j <= fdmax; j++) {
+                                // send to everyone!
+                                if (FD_ISSET(j, &master)) {
+                                    // except the listener and ourselves
+                                    if (j != listener && j != i) {
+                                        if (send(j, buf, nbytes, 0) == -1) {
+                                            perror("send");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } // END handle data from client
+                } // END got new incoming connection
+            } // END looping through file descriptors
+        } // END for(;;)--and you thought it would never end!
+       
+        return 0;
+    } 
+    请注意到我这个代码里有两个文件描述符集合：master和read_fds。第一个master集合里面放的时候当前已经连接了的socket描述符，显然，也包括我们最开始监听新请求用的listener文件描述符。
+    为什么我会多用一个master的集合呢？原因就是select()函数为了反映一个集合中哪些文件描述符被修改了，实际上会改变你传进去的那个集合里的值，而我又必须监控每一个链接，所以我得弄个备份，每次把master赋值给read_fds，相当于read_fds是master的副本，然后再传入select()函数中使用。这样master总能保存所有已存在的连接的文件描述符。
+    是不是意味着每一次我建立了一个新链接（通过accept()函数得到一个新的描述符）都得把它加入到master集合？对，都得加入！
+    是不是意味着每一次有一个链接在远方被断开了，我是不是都得把它从master集合中删除？对，都得删除！
+    这样就意味着，master中总是保存着正在连接着的链接的文件描述符，listener也包括在内哦！
+    你们可能注意到了，我把listener也加入了read_fds，用select()来检测是否可读。为什么这样做？因为如果listener可读的时候，意味着我此时有一个新的连接正在等待队列里面，于是我就accept()它，并且把accept()得到的新的socket描述符加入master集合。类似的，当一个连接（非listener）可读时，我就去recv()它，如果返回0，就表示这个链接已经被远方的客户端断开了，于是我必须把它从master集合中删除！
+    如果某个客户端的socket描述符在recv()的时候返回非零，这表示我收到了某些数据了。然后我就把这些数据发给所有其他客户端，去哪找？当然是master里面了。我会遍历master集合，然后发送给里面所有的其他的客户端（不包括发送该数据的客户端，也不包括listener）。
+    这个例子也只是比简单稍微难一点儿而已，对于我们全能的select()的函数来说。（下面作者要放大招了，各位要hold住！）
+    除了select()之外，还有一个函数叫做：poll()。它的行为看起来就和select()一样，但是它管理操作文件描述符集合的方法却不同，让我们拭目以待吧！
+7.3. 处理send()函数的意外情况
+    让我们回顾一下上面章节中提到过的send()函数，我说过send()函数可能不会一次性把调用者传入的所有字节都发送出去，还记得吗？比如你传入512个字节让它去发送，但是它的返回值是412，那接下来的100字节肿么办？
+    没关系，那剩下的100字节还存在你传入的内存块里。为什么会这样呢？原因就是由于一些你不可控的情况（具体发生什么事情先不用了解）发生了，内核决定这一次send()调用不把所有数据发出去，只发出去一部分数据。那么此时，剩下的这部分数据到底是继续发，还是不发，完全就听你的了！（举个生活中的例子，你去面馆吃饭，你说到，我要吃十碗面，但是由于厨师不够的原因（不可控），服务员只能一次性上8碗面，于是你吃完了，还剩2碗面没上，那剩下的那2碗面究竟是否继续上，就全听你的了，你可能觉得饱了，说：算了，不发了。你可能说了吃10碗就得吃10碗，于是说：上剩下的两碗。）
+    你其实可以封装一下send()，做到一次发，直到全发送为止，封装成sendall()函数，如下所示：
+    #include <sys/types.h>
+    #include <sys/socket.h>
+
+    int sendall(int s, char *buf, int *len)
+    {
+        int total = 0; // how many bytes we've sent 一共已发送多少字节了
+        int bytesleft = *len; // how many we have left to send 还剩多少字节没发送
+        int n;
+        
+        while(total < *len) {
+            n = send(s, buf_total, bytesleft, 0);
+            if (n == -1) { break;}
+            total += n;
+            bytesleft -= n;
+        }
+        
+        *len = total; // return number actually sent here 如果上面那个while出错了，那么这里告诉调用者已经发送多少数据出去了
+        
+        return n==-1?-1:0; // return -1 on failure, 0 on success 如果n为-1，就是while里面出错，为0，表示全部发送成功
+    }
+    在这个例子中，s就是你想要发送数据的socket文件描述符，buf指向要发送数据的指针，len是buf里面的数据的字节长度数。
+    该函数返回-1表示出错，errno此时还可用，记录的是while里面的send()函数出错的原因。当函数返回时，len表示已经成功被发送出去的字节数。如果此时的len与你调用sendall()函数时传入的len的值相等就表示成功了，如果不相等，就意味着有错误。并且如果真的发生了错误，函数会立即返回，然后告诉你。
+    用个更加完整的例子，这是一个如何调用sendall()函数的示例：
+    char buf[10] = "Beej!";
+    int len;
+    len = strlen(buf);
+    if (sendall(s, buf, &len) == -1) {
+        perror("sendall");
+        printf("We only sent %d bytes because of the error!\n", len);
+    } 
+    当只有部分而不是全部数据到达接收端，那它会如何处理呢？如果一个包的长度不是固定的，而是可变的，那么接收者如何知道一个包的结束和另一个包的开始呢？确实，在现实世界的场景中，这的确是一个大问题。所以这里就涉及到了所谓的封装！就是说你发送数据的时候应该把它封装起来。欲知后事如何，请听下回分解！
+7.4. 序列化（串行化）——如何打包（封装）数据
+    你已经发现，在网络世界中发送文本数据其实很简单。但是如果你想发送的是“二进制”的数据时，例如像整型数或者浮点型数，这下你该怎么办？别担心，已经有几种解决方案存在于世界上了，你只需要选择其中的一种即可。
+    第一种，用sprintf()函数，把数字转换成文本字符串，然后发送文本字符串即可。接收者在接收到这些内容以后，用strtol()函数解析成数字即可。
+    第二种，就发送原始数据，把首地址传给send()函数。
+    第三种，把数字进行某种可移植的格式的编码，然后接收者接收了以后进行解码即可。
+    亮点总在最后！我选第三种！
+    在开始之前，我想非常认真的提醒你，已经有很多可用的库函数来完成上面说的“编码”的操作了，如果非要使用你自己定义的方式（格式）来完成编码操作，并且还要保证高可移植性，零错误，这真的是一种挑战！所以，在你决定要使用你自己实现的方式来做这些事情之前，请一定要多做点准备工作！这一段内容就是为那些好奇的人而存在的，他们总在想：这类事情是如何工作的？
+    然后上面提到的三种方法，各有千秋。但是普遍来说我更愿意用第三种方式。首先，我们来谈谈第三种方式的相对于另外两种方式的优缺点。
+    第一种方式，也相当于在发送前把数字“编码”成文本，优点在于你更容易的打印和阅读这些通过网络传过来的数据。往往在不关心带宽的情况下，一种人类可读型的协议会别其他协议更加好。例如Internet Relay Chat（IRC）协议（详见：http://en.wikipedia.org/wiki/Internet_Relay_Chat）。然后它的缺点就是数字和文本转换起来很慢，而且用文本表示数字往往在空间上的开销比原来那个数字的开销更大。
+    第二种方式，纯粹传递原始数据。听起来好像非常简单，没什么额外操作（但是风险很高！），但是请看下面这段代码：
+    发送者这样做：
+    double d = 3490.15926535;
+    
+    send(s, &d, sizeof d, 0); /* DANGER -- non-portable*/
+    接收者这样做：
+    double d;
+
+    recv(s, &d, sizeof d, 0); /* DANGER -- non-portable*/
+
+    简单，粗暴，不是吗？但是最终的结果是，不是所有架构的CPU都用同一种方式来表示浮点数，并且字节序也不一样（之前说到过），以至于这份代码是不可移植的。（你说你根本不关心移植性，好吧，就这样用吧，真心简单，粗暴，并且有效！！！）
+    当封装整型的数的时候，我们已经见识过htons()这一类函数是如何帮助我们在保持通用型的前提下把数字转换到网络字节序了。不幸的是，对于浮点型的数字，好像没有类似的函数可用了，真的一点儿希望都没有了嘛？
+    别怕！（呃，你有没有真的担心过，要是我说：“嘿，真的没一点儿希望了，对于浮点数完全没办法”）实际上，我们可以这样做：我们把所有的数据“编码”成某种“众所周知的二进制格式”后再发送，接收者在远方收到数据包以后再对其进行“解码”。
+    “众所周知的二进制格式”是啥？这样解释吧！我们已经见过htons()函数这种例子了，对吧？htons()函数把一个无论何种主机字节序的数字转换成（这里你也可以认为是“编码成”）网络字节序。反过来的话，接收者通过使用ntohs()函数就可以把它从网络字节序转换成（这里你可以想象成是“解码”）主机字节序。
+    对于非整型数就没有这样的函数来进行所谓的编解码操作了嘛？很遗憾，在C语言中，没有一个标准方式，但是在Python中有哦~~所以会C的人，又会Python，将会非常棒！
+    这里有个简单、粗暴的来封装浮点型的数字，当然，有很多可以优化的地方，我只是举个例而已。
+    #include <stdint.h>
+    
+    uint32_t htonf(float f)
+    {
+        uint32_t p;
+        uint32_t sign;
+
+        if (f < 0) { sing = 1; f = -f; }
+        else { sign = 0; }
+
+        p = ((((uint32_t)f)&0x7fff)<<16) | (sign<<31); // whole part and sign
+        p |= (uint32_t)(((f - (int)f) * 65536.0f))&0xffff; // fraction
+
+        return p;
+    }
+    
+    float ntohf(uint32_t p)
+    {
+        float f = ((p>>16)&0x7fff); // whole part
+        f += (p&0xffff) / 65536.0f; // fraction
+        if (((p>>31)&0x1) == 0x1) { f = -f; } // sign bit set
+        return f;
+    }
+    上面的代码算是一个把浮点数转换成32位整型数的本地实现。最高位（第31位）用来存储符号的，1代表负数。接下来的15位（30-16）用来存储这个浮点数的整数部分。剩下的16位（15-0）存储小数部分。
+    用法也非常简单：
+    #include <stdio.h>
+    int main(void)
+    {
+        float f = 3.1415926, f2;
+        uint32_t netf;
+        netf = htonf(f);  // convert to "network" form
+        f2 = ntohf(netf); // convert back to test
+        printf("Original: %f\n", f);        // 3.141593
+        printf(" Network: 0x%08X\n", netf); // 0x0003243F
+        printf("Unpacked: %f\n", f2);       // 3.141586
+        return 0;
+    }
+    上述方式的优点是小巧，简单，快速，缺点是不足以有效的使用空间，而且能表示的范围也有限——你可以试试去存储一个大雨32767的数，结果会很惨。你还可以发现上面例子中，那个十位数的最后两位没有正确被保留下来。
+    有什么可以替代的方法吗？存储浮点数有一种所谓的“标准方法”，被称作“IEEE-754”（详见：http://en.wikipedia.org/wiki/IEEE_754）。绝大部分计算机内部都使用这种格式来操作浮点数的数学计算，所以在这种情况下，严格地说，“主机浮点数”转“网络浮点数”其实是不必要的。但是假设你想要使得你的源代码具有更好的可移植性，很抱歉，这是根本不可能实现的一个假设。（另一方面，如果你想要这个转换更快一点，你应该优化它，使它与平台无关，然后就不需要手动去做转换了。也就想htons()这类函数一样，使得在调用它们时，让代码做到与平台无关）
+    这有些代码为我们展示了如何把浮点型和双精度浮点型的数字转换成IEEE-754定义的格式。（大多数情况下，这份代码不会编码非数值的数和无穷大，但是可以修改代码来对它们进行编码）
+    #define pack754_32(f) (pack754((f), 32, 8))
+    #define pack754_64(f) (pack754((f), 64, 11))
+    #define unpack754_32(i) (unpack754((i), 32, 8))
+    #define unpack754_64(i) (unpack754((i), 64, 11))
+    uint64_t pack754(long double f, unsigned bits, unsigned expbits)
+    {
+        long double fnorm;
+        int shift;
+        long long sign, exp, significand;
+        unsigned significandbits = bits - expbits - 1; // -1 for sign bit
+        if (f == 0.0) return 0; // get this special case out of the way
+        // check sign and begin normalization
+        if (f < 0) { sign = 1; fnorm = -f; }
+        else { sign = 0; fnorm = f; }
+        // get the normalized form of f and track the exponent
+        shift = 0;
+        while(fnorm >= 2.0) { fnorm /= 2.0; shift++; }
+        while(fnorm < 1.0) { fnorm *= 2.0; shift--; }
+        fnorm = fnorm - 1.0;
+        // calculate the binary form (non-float) of the significand data
+        significand = fnorm * ((1LL<<significandbits) + 0.5f);
+        // get the biased exponent
+        exp = shift + ((1<<(expbits-1)) - 1); // shift + bias
+        // return the final answer
+        return (sign<<(bits-1)) | (exp<<(bits-expbits-1)) | significand;
+    }
+    long double unpack754(uint64_t i, unsigned bits, unsigned expbits)
+    {
+        long double result;
+        long long shift;
+        unsigned bias;
+        unsigned significandbits = bits - expbits - 1; // -1 for sign bit
+        if (i == 0) return 0.0;
+        // pull the significand
+        result = (i&((1LL<<significandbits)-1)); // mask
+        result /= (1LL<<significandbits); // convert back to float
+        result += 1.0f; // add the one back on
+        // deal with the exponent
+        bias = (1<<(expbits-1)) - 1;
+        shift = ((i>>significandbits)&((1LL<<expbits)-1)) - bias;
+        while(shift > 0) { result *= 2.0; shift--; }
+        while(shift < 0) { result /= 2.0; shift++; }
+        // sign it
+        result *= (i>>(bits-1))&1? -1.0: 1.0;
+        return result;
+    }
+    为了方便的打包和解包32位和64位的数（浮点数），我在代码顶部手动定义了一些宏。当然也可以直接调用pack754()函数，然后传入位宽（多少位）和指数的大小。（指数是为标准化数字的指数而保留的）
+    下面是调用示例：
+    #include <stdio.h>
+    #include <stdint.h> // defines uintN_t types
+    #include <inttypes.h> // defines PRIx macros
+    int main(void)
+    {
+        float f = 3.1415926, f2;
+        double d = 3.14159265358979323, d2;
+        uint32_t fi;
+        uint64_t di;
+        fi = pack754_32(f);
+        f2 = unpack754_32(fi);
+        di = pack754_64(d);
+        d2 = unpack754_64(di);
+        printf("float before : %.7f\n", f);
+        printf("float encoded: 0x%08" PRIx32 "\n", fi);
+        printf("float after  : %.7f\n\n", f2);
+        printf("double before : %.20lf\n", d);
+        printf("double encoded: 0x%016" PRIx64 "\n", di);
+        printf("double after  : %.20lf\n", d2);
+        return 0;
+    }
+    上面的代码的运行结果如下：
+    float before : 3.1415925
+    float encoded: 0x40490FDA
+    float after  : 3.1415925
+    double before : 3.14159265358979311600
+    double encoded: 0x400921FB54442D18
+    double after  : 3.14159265358979311600
+
+    你可能还有一个疑惑，如何打包结构体呢？非常遗憾，编译器在填充结构体的时候是不受约束的，也意味着你无法在网络上做到一次性发送一个结构体~~~（你是不是已经厌烦了“不能xxx”，“无法完成xxx”这种错误提示，引用我一哥们儿的口头禅“无论何时，只要有错误发生，我总是责怪微软。”，呃，得澄清一下，这个无法完成跟微软无关，但是我朋友那句口头禅很靠谱。）
+    回到刚才的话题：要想发送结构体，最好的方法就是把结构体的每个成员独立地包装再发送，然后接收方再重新组装。
+    你一定会想，要独立的包装再发送，然后重新组装，一定是有很多工作要做。没错，你猜对了。但是有个方法可以简化，就是为这个结构体编写一个辅助函数来完成这两个事情。
+    在Kernighan和Pike所写的《The Practice of Programming》一书中（详见：http://cm.bell-labs.com/cm/cs/tpop/），他们使用了printf()—完成了就像pack()和unpack()函数那样类似的功能，我会给出这本书的链接，但是，很显然，那本书中的其他内容并不会在网上有免费下载。（当然，你可以去下盗版的pdf书~~但是我并不提倡。如果你看过了盗版书，觉得它写得不错，请购买一本正版吧，就这么简单！）
+    下面我将告诉你一段代码，是在BSD许可证下发布的一组C语言的API，参见（http://tpl.sourceforge.net/），虽然我没用过它们，但是我依然很敬仰它们。Python和Perl的程序猿只需要只用他们语言里面自带的pack()和unpack()函数即可完成这些事情。Java程序猿也有一大堆序列化用的接口函数，用法都与之前介绍的差不多。
+    但是你想要在C语言中写一个你自己的打包工具函数，K&P的书中的技巧是似乎用变参列表是的printf()能像一个函数一样来进行打包操作。下面我将定义一组我自己的打包和解包函数，基于K&P的变参列表的思想，希望足够让你搞明白这些事情到底是如何做到的，也是给你一些启发。
+    （这些代码参考借鉴了上面提到过的pack754()函数。除了它们是把数字打包成一个字符串数组，而不是打包成另一个整型数，packi*()函数的操作就如htons()那组函数一样）
+    #include <ctype.h>
+    #include <stdarg.h>
+    #include <string.h>
+    #include <stdint.h>
+    #include <inttypes.h>
+    // various bits for floating point types--
+    // varies for different architectures
+    typedef float float32_t;
+    typedef double float64_t;
+    /*
+    ** packi16() -- store a 16-bit int into a char buffer (like htons())
+    */
+    void packi16(unsigned char *buf, unsigned int i)
+    {
+        *buf++ = i>>8; *buf++ = i;
+    }
+    /*
+    ** packi32() -- store a 32-bit int into a char buffer (like htonl())
+    */
+    void packi32(unsigned char *buf, unsigned long i)
+    {
+        *buf++ = i>>24; *buf++ = i>>16;
+        *buf++ = i>>8;  *buf++ = i;
+    }
+    /*
+    ** unpacki16() -- unpack a 16-bit int from a char buffer (like ntohs())
+    */
+    unsigned int unpacki16(unsigned char *buf)
+    {
+        return (buf[0]<<8) | buf[1];
+    }
+    /*
+    ** unpacki32() -- unpack a 32-bit int from a char buffer (like ntohl())
+    */
+    unsigned long unpacki32(unsigned char *buf)
+    {
+        return (buf[0]<<24) | (buf[1]<<16) | (buf[2]<<8) | buf[3];
+    }
+    /*
+    ** pack() -- store data dictated by the format string in the buffer
+    **
+    **  h - 16-bit              l - 32-bit
+    **  c - 8-bit char          f - float, 32-bit
+    **  s - string (16-bit length is automatically prepended)
+    */
+    int32_t pack(unsigned char *buf, char *format, ...)
+    {
+        va_list ap;
+        int16_t h;
+        int32_t l;
+        int8_t c;
+        float32_t f;
+        char *s;
+        int32_t size = 0, len;
+        va_start(ap, format);
+        for(; *format != '\0'; format++) {
+            switch(*format) {
+            case 'h': // 16-bit
+                size += 2;
+                h = (int16_t)va_arg(ap, int); // promoted
+                packi16(buf, h);
+                buf += 2;
+                break;
+            case 'l': // 32-bit
+                size += 4;
+                l = va_arg(ap, int32_t);
+                packi32(buf, l);
+                buf += 4;
+                break;
+            case 'c': // 8-bit
+                size += 1;
+                c = (int8_t)va_arg(ap, int); // promoted
+                *buf++ = (c>>0)&0xff;
+                break;
+            case 'f': // float
+                size += 4;
+                f = (float32_t)va_arg(ap, double); // promoted
+                l = pack754_32(f); // convert to IEEE 754
+                packi32(buf, l);
+                buf += 4;
+                break;
+            case 's': // string
+                s = va_arg(ap, char*);
+                len = strlen(s);
+                size += len + 2;
+                packi16(buf, len);
+                buf += 2;
+                memcpy(buf, s, len);
+                buf += len;
+                break;
+            }
+        }
+        va_end(ap);
+        return size;
+    }
+    /* 
+    ** unpack() -- unpack data dictated by the format string into the buffer
+    */
+    void unpack(unsigned char *buf, char *format, ...)
+    {
+        va_list ap;
+        int16_t *h;
+        int32_t *l;
+        int32_t pf;
+        int8_t *c;
+        float32_t *f;
+        char *s;
+        int32_t len, count, maxstrlen=0;
+        va_start(ap, format);
+        for(; *format != '\0'; format++) {
+            switch(*format) {
+            case 'h': // 16-bit
+                h = va_arg(ap, int16_t*);
+                *h = unpacki16(buf);
+                buf += 2;
+                break;
+            case 'l': // 32-bit
+                l = va_arg(ap, int32_t*);
+                *l = unpacki32(buf);
+                buf += 4;
+                break;
+            case 'c': // 8-bit
+                c = va_arg(ap, int8_t*);
+                *c = *buf++;
+                break;
+            case 'f': // float
+                f = va_arg(ap, float32_t*);
+                pf = unpacki32(buf);
+                buf += 4;
+                *f = unpack754_32(pf);
+                break;
+            case 's': // string
+                s = va_arg(ap, char*);
+                len = unpacki16(buf);
+                buf += 2;
+                if (maxstrlen > 0 && len > maxstrlen) count = maxstrlen - 1;
+                else count = len;
+                memcpy(s, buf, count);
+                s[count] = '\0';
+                buf += len;
+                break;
+            default:
+                if (isdigit(*format)) { // track max str len
+                    maxstrlen = maxstrlen * 10 + (*format-'0');
+                }
+            }
+            if (!isdigit(*format)) maxstrlen = 0;
+        }
+        va_end(ap);
+    }
+    下面是一个如何调用上面的函数的示范程序，它将一些数据打包到buf里面，然后解包到变量里面。请注意，当调用unpack()函数时，传入一个字符串的参数（格式化指定符s，就像%s，最好在其前面加入最大长度限定，以防止内存越界。例如“96s”）。在解包从网络收到的数据的时候一定要谨慎小心，因为一些险恶的用户可能会发送一个恶意的数据包来攻击你的系统。
+    #include <stdio.h>
+    // various bits for floating point types--
+    // varies for different architectures
+    typedef float float32_t;
+    typedef double float64_t;
+    int main(void)
+    {
+        unsigned char buf[1024];
+        int8_t magic;
+        int16_t monkeycount;
+        int32_t altitude;
+        float32_t absurdityfactor;
+        char *s = "Great unmitigated Zot!  You've found the Runestaff!";
+        char s2[96];
+        int16_t packetsize, ps2;
+        packetsize = pack(buf, "chhlsf", (int8_t)'B', (int16_t)0, (int16_t)37,
+                (int32_t)-5, s, (float32_t)-3490.6677);
+        packi16(buf+1, packetsize); // store packet size in packet for kicks
+        printf("packet is %" PRId32 " bytes\n", packetsize);
+        unpack(buf, "chhl96sf", &magic, &ps2, &monkeycount, &altitude, s2,
+            &absurdityfactor);
+        printf("'%c' %" PRId32" %" PRId16 " %" PRId32
+                " \"%s\" %f\n", magic, ps2, monkeycount,
+                altitude, s2, absurdityfactor);
+        return 0;
+    }
+    不管你是传递你自己的数据还是别人的数据，有个好习惯就是创建一组适用于数据打包/解包的辅助函数，为了将来更好的调试、排错。反正比每次都手动来做好得多。
+    问：“在打包的时候，究竟用哪种格式比较好？”。问得好！！幸好有RFC4506（详见：http://tools.itef.org/html/rfc4506），它定义了数据的表示方法标准，已经定义了很多类型如何表示成二进制，有浮点型，整数型，数组，纯数据等等一些。如果你准备自己手动打包数据，那我建议遵循它定义的标准，呃，但是你也并非一定得这么做~。就算你不按RFC4506的标准来打包，至少我不认为，也不会有警察来上门查水表。
+    不管任何情况下，发送数据前，把数据打包，总是不会错的。
+7.5. 数据封装的奥秘（肯定不对，等会儿再议）
+    根据网络协议封装数据到底是在干什么？最简单的例子，就是说你在要发送的数据前面加上一个头部，里面写上一些识别信息或者你要发送的数据包的长度，或者两者都写上。
+    那头部究竟是啥样？可以这样说，为了完成你的目的，你可以在里面放上任何你觉得需要的一些二进制的数据。
+    好像说得很模糊，对吧？
+    那好，我觉得例子。就比如说一个多人聊天的程序，它使用SOCK_STREAM方式。当一个用户输入（也可以理解成“说了”）一些数据，这时候，有两部分信息需要传给服务器程序：它说的内容和它是谁。
+    现在看来没问题了？呃，你心虚的问“难道还有什么没考虑到的嘛？”
+    有问题，就是“它说的内容”这个消息的长度是不定的。举例来说吧，一个叫做“tom”的用户对你了说“Hi”，另一个叫“Benjamin”用户对你说了“Hey guys what is up?”。
+    此时服务器把这两条消息发送给你，你收到的数据流看起来大约是这样的：
+    tomeHiBenjaminHeyguyswhatisip?
+    那此时客户端要如何知道某条消息的起始和结束呢？你可以这样简单的做，把每条消息都弄成定长的（假设1024字节），然后调用我们之前实现过的sendall()函数。但是你不觉得这样太浪费带宽了嘛？你只是发送了一个Hi，然后浪费了1022个字节。
+    就是类似于上面那样，我们把要发送的数据贴上一个小小的头部，并且封装成一个数据包形式的数据结构。使得服务器和客户端都能够懂得如何来打包和解包（有时候这里被称为编列和反编列）这些数据（包）。别看不起这点儿东西，我们正在开始定义一个所谓的“协议”，它用来描述服务器和客户端之间如何通信。（哇，是不是感觉自己忒牛逼了！）
+    在这种情况下，让我们假设用户名是定长的，8个字符长，不足8位补'\0'。再假设用户发出的信息是不定长的，最长128个字符长。现在让我们来看看基于上述定义下的数据包的结构是什么样的：
+    1. len（1 byte, unsigned）——数据包的总长度，包括8字节的用户名和聊天的内容长度。
+    2. name（8 bytes）——用户名，不足用'\0'填充。
+    3. chatdata（n-bytes）——聊天的内容，不能超过128个字符长度。数据包的总长度等于这个字段的长度加上8（name字段的长度）
+    为什么我会选择8字节和128字节作为两个字段的上限呢？我只是举个例子而已，我觉得已经够长了。如果你觉得不爽，你可以定义name字段为30个字符长度，随你啦~
+    用上面的定义好的数据包结构，那么第一个我们要发送的数据包就包含如下信息内容（用十六进制和ASCII字符表示）
+
+    0A        74 6F 6D 00 00 00 00 00        48 69
+    （长度）   T  o  m  （填充字节）           H  i
+    那第二个数据包类似：
+
+    18        42 65 6E 6A 61 6D 69 6E        48 65 79 20 67 75 79 73 20 77 ...（省略）
+    （长度）   B  e  n  j  a  m  i  n         H  e  y     g  u  y  s     w  ...（省略）
+    
+    （length这个字段应该是要用网络字节序表示的。但是在这里，只有一个字节长度，所以并不影响。但是通常来说你应该把二进制的整数都用网络字节序存储在数据包里）
+    当你准备发送这个数据包的时候，你可以放心的使用类似于sendall()的函数来完成，当然你也可以多次调用send()来完成。
+    同样的，当你准备接受这个数据包的时候，你也需要额外的做点“解码”工作。安全起见，你应该假设，你可能一次只能得到这个数据包的一部分，而不是全部。你需要不断的调用recv()，直到你把这个数据包全部收到。
+    呃，如果知道我把数据包收全了？难道你忘记我们在数据包的开头定义了整个数据包的长度了嘛？那个数字可以告诉我们需要去收取多少数据，并且我们还知道一个数据包的最大长度是1+8+128 = 137个字节。
+    实际上还有很多要做的。由于你知道每个数据包会以一个length字段作为开端，你可以调用recv()，只获取这个数据包的length字段。一旦你获得了长度，你就可以再次调用recv()来指定获取剩下的长度（length-1）的内容，当然你也许需要调用很多次recv()才能获取完剩下的长度的内容。这样做之后你就会获得了一个完整的数据包。这种方式的优点在于你只需要一个足够大的缓存，能够一次性存储一个完整的包即可（当然从最坏情况考虑），但缺点就是你至少要调用两次recv()才能获得一个完整的数据包。
+    另一种方法是这样，你调用recv()的时候告诉内核我要获得一个数据包的最大长度的内容（一个完整的数据包的最大长度），当然你可能没法一次性调用recv()就能获得这么多，当然也有可能。然后你把获得的这个定长（说了是最大长度，当然是定长）的内容放置在某个缓存的尾部，最后就查看之前的缓存加上刚才获得的这一段内容，是否构成了一个完整的数据包（当然是完整的，除非传输出错了，你现在拥有的临时数据长度大于理论一个数据包的最大长度），很可能，你不仅获得了一个完整的数据包，你的临时缓存内还有下一个包的开头一部分数据，甚至下下个包的数据，你得把它们保管好！
+    一般这种情况，你需要的最缓存长度是数据包最大长度的两倍。你将在这个缓存里面对到达的数据包进行重新组装，我们就叫它“工作缓存”吧。
+    每一次你调用recv()来获得数据，你都应该把它附加到工作缓存中（可以想象工作缓存是一种FIFO的形式），来检查工作缓存中是否已经存在至少一个完整的数据包了。意思就是，工作缓存中的字节数大小要大于或等于头部length字段的中指定的大小加上1（因为length字段表示接下来的内容的大小，并不包括length字段本身占据了一个字节）。如果工作缓存中的字节数小于1，很明显，里面肯定不包含一个完整的包。你一定要为下面说的这种特殊情况考虑好，那就是第一个字节出错的情况，你已经不能依赖它来定位数据包的长度。
+    那么一旦发现有一个完整数据包了，接下来怎么做就全听你的了。一般都是把拷贝走，拿去用，然后再把它用工作目录中删除。
+    别以为上面这些就很难了，还没玩呢~此时，你已经从内核中取走了一个完整的数据包和下一个数据包的一部分，通过recv()函数。那么你的工作缓存中也就相当于存储了一个完整的数据包和一个不完整的数据包！（这就是为什么我前面说的，你的工作缓存的大小必要两倍于一个数据包的最大值，就是怕上述这种情况发生）
+    由于你从第一个数据包的头部知道了这个数据包的总长度，你还知道工作目录中的现存字节数，你就可以通过做减法，计算来得到，究竟工作缓存中有多少字节其实是属于下一个数据包的。一旦你处理完第一个数据包，你可以把它从工作缓存中移除，然后把属于第二个数据包的缓存移动到工作目录的头部，然后就准备做下一次recv()了！
+    （有一部分读者可能注意到了，实际上，把属于第二个数据包的缓存移动到工作缓存的开头的时间开销是非常大的，也不明智，完全可以通过改用循环队列来优化。但是如果你不懂循环队列的，很遗憾，这已经超出本书的讨论范围了，如果你仍然很好奇，你可以找本数据结构方面的数来看看）
+    我从没说过这会很简单。唉~好吧，我承认我开头说过。事实上你现在是不是觉得它已经很简单了？你需要通过实际练习，然后把它就会自然的更加简单。我以亚瑟王之剑的名义发誓。（总而言之，好记心不如烂笔头~还是中文简单啊，哈哈）
+
+7.6. 广播数据包——Hello，World！
+    到目前为止，这本书已经讨论过了从一个主机发送数据到另一个主机的方式了。但是应该有种方式，我也坚信，你也可以，可以在同一时间把数据发送到多个主机。
+    使用UDP协议和标准的IPv4协议，这个是可以被一个叫做广播（broadcasting）的机制来完成的。在IPv6里，广播机制是不支持的，你必须借助更高级的一种技术，多点发送（multicasting）。很遗憾，我现在不会在这里讨论它。但是将来可能会更新它的——因为我们目前被困在IPv4里面了。（因为IPv6现在还没普及，2013年3月17日 16:43:11）
+    等等！你可以不能随意的开始发送广播，在发送广播之前，你得先把socket的属性设置为SO_BROADCAST才行！就如同要先揭开发射导弹的那个开关外面罩着的塑料壳（战斗机发射导弹的电影看过吧？）！你要知道，发送广播的威力就想发射导弹一样，如果出错，后果不堪设想。
+    严肃的说，使用广播数据包是比较危险的，那就是：每一个系统在接收到一个广播数据包之后必须像剥洋葱一样，拨开所有底层的协议的封装（头部、尾部），然后看到端口号，才知道是发给哪个端口的（进程），然后要么把数据交给bind那个端口的进程，要么没有任何进程使用这个端口，只能丢弃。不管是最终是哪种结果，每一个主机在接收到广播报之后都要做很多工作（剥去底层封装），这会牵涉到局域网中的所有主机，其中有可能有一大部分主机做了无用功（最后发现没有进程使用那个UDP的端口，只能丢弃，那么之前的剥封装工作就白费了）。还记得Doom这个游戏刚出来的时候，就引起了很多关于它的网络部分代码的抱怨。（Doom游戏最开始的时候，网络部分是使用的广播报？）
+    在发送一个广播消息的时候，如何制定目的地址呢？现在已经不止一种方法来解决这个问题了，下面介绍两种：
+    1. 把消息发送到一个“子网的广播地址”。广播地址的组成是这样：第一部分是某个子网的网络部分，第二部分是把这个子网的主机部分全部填1。举例说明最好，比如我家的网络是192.168.1.0，子网掩码是255.255.255.0，这样最后一个字节就是我的主机号那一部分了（因为从这个子网掩码来看，前三个字节是网络号，后一个字节是主机号）。那么可以推算出，我这个网络的广播地址就是192.168.1.255了。在Unix系统中，使用ifconfig命令可以直接告诉你广播地址。你可以发送这种类型的广播数据包给远程网络或者你的局域网，但是这样做存在风险，因为目的网络的路由器也可能不会转发你这个数据包，可能直接抛弃。（如果它们不直接抛弃它，你可以想象，随便谁都可以通过对这个网络疯狂的发送广播报，像洪水一个的攻击这个网络，使得这个网络瘫痪）
+    2. 把消息发给“全球广播地址”。全球广播地址就是255.255.255.255，也被叫做“INADDR_BROADCAST”。大多数机器会把你的网络号和全球广播地址做按位与的逻辑运算来推算出某一个网络广播地址，有些机器不这样做。（其实你自己可以推算出，为何要机器去做呢？不要依赖别人）如果遇到那些不这样做的路由器，那它就不会把这个数据包广播到你的局域网上面，从这一点考虑，你应该自己做好，不要去依赖机器。
+    有没有想过，如果我们不先把socket的属性设置为“SO_BROADCAST”，就把数据往广播地址发送，会发生什么？我们用之前的talker程序试试！
+    $ talker 192.168.1.2 foo
+    sent 3 bytes to 192.168.1.2
+    $ talker 192.168.1.255 foo
+    sendto: Permission denied
+    $ talker 255.255.255.255 foo
+    sendto: Permission denied
+    就这样，根本行不通。因为我们没有设置SO_BROADCAST这个属性。把它设置好，然后再调用sendto()，你就可以随意发了。
+    事实上，这一点也就是同样使用UDP协议的程序，一个可以广播，另一个不可以广播的唯一不同点！那么我们就那老版本的talker程序加上一段关于设置socket的SO_BROADCAST属性的代码，我们就叫它broadcaster.c吧：
+    /*
+    ** broadcaster.c -- a datagram "client" like talker.c, except
+    **                  this one can broadcast
+    */
+    #include <stdio.h>
+    #include <stdlib.h>
+    #include <unistd.h>
+    #include <errno.h>
+    #include <string.h>
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <netdb.h>
+    #define SERVERPORT 4950 // the port users will be connecting to
+    int main(int argc, char *argv[])
+    {
+        int sockfd;
+        struct sockaddr_in their_addr; // connector's address information
+        struct hostent *he;
+        int numbytes;
+        int broadcast = 1;
+        //char broadcast = '1'; // if that doesn't work, try this
+        if (argc != 3) {
+            fprintf(stderr,"usage: broadcaster hostname message\n");
+            exit(1);
+        }
+        if ((he=gethostbyname(argv[1])) == NULL) {  // get the host info
+            perror("gethostbyname");
+            exit(1);
+        }
+        if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+                perror("socket");
+            exit(1);
+        }
+        // this call is what allows broadcast packets to be sent:
+        if (setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcast,
+            sizeof broadcast) == -1) {
+            perror("setsockopt (SO_BROADCAST)");
+            exit(1);
+        }
+        their_addr.sin_family = AF_INET;     // host byte order
+        their_addr.sin_port = htons(SERVERPORT); // short, network byte order
+        their_addr.sin_addr = *((struct in_addr *)he->h_addr);
+        memset(their_addr.sin_zero, '\0', sizeof their_addr.sin_zero);
+        if ((numbytes=sendto(sockfd, argv[2], strlen(argv[2]), 0,
+                 (struct sockaddr *)&their_addr, sizeof their_addr)) == -1) {
+            perror("sendto");
+            exit(1);
+        }
+        printf("sent %d bytes to %s\n", numbytes,
+            inet_ntoa(their_addr.sin_addr));
+        close(sockfd);
+        return 0;
+    }
+    那么这个broadcaster和其他平常的使用UDP的程序有什么不同呢？没啥不同，出了一点，这个允许客户端发送广播包。现在，把老的那个listener程序在一个shell窗口中启动吧，然后在另一个shell中运行broadcaster。你现在应该看到之前打印中的错误都没有了，应该是：
+    $ broadcaster 192.168.1.2 foo
+    sent 3 bytes to 192.168.1.2
+    $ broadcaster 192.168.1.255 foo
+    sent 3 bytes to 192.168.1.255
+    $ broadcaster 255.255.255.255 foo
+    sent 3 bytes to 255.255.255.255
+    并且你应该也能看到listener程序对它们发送的包的反应了。（如果listener要是没反应，有个可能的原因是它bind()绑定的地址是一个IPv6的，你把listener中的AF_UNSPEC改成AF_INET来强制使用IPv4吧）
+    下面玩个有趣的！你在你的局域网里面再找一台主机，也运行listener程序，然后你再运行一次broadcaster，参数是广播地址...仔细看！两个listener都会得到这个数据包，而你却只调用了一次sendto()！
+    如果listener得到了你直接发给它的数据，但是广播地址上并没有数据，很可能是因为你本地的主机装有防火墙，它把这些数据包屏蔽了。（作者说，在这里要感谢Pat和Bapper，因为他们发现为什么作者的示例代码在某些机器上工作不正常的原因，就是因为防火墙的原因，并且在他们俩先于作者找到这个原因！作者也说要在本书中提及他们俩，并且感谢他们俩！）
+    再次强调一下，发送广播包一定要小心对待。由于所有位于局域网内的主机都必须得处理这个广播包，无论他们是否调用了recvfrom()，这个操作给所有本地主机增加了一个不小的负载。所以一定要尽量少的，并且在适当的情况下才使用广播包。
