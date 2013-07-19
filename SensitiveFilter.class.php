@@ -1,7 +1,6 @@
 <?php
 /**
  * 敏感词汇过滤
- * User: konakona
  * Date: 12-11-28
  * Time: 下午4:37
  * 调用方式
@@ -31,3 +30,12 @@ class SensitiveFilter extends Think{
         self::$wordArr = include 'SensitiveThesaurus.php';
     }
 } 
+/*
+如果内容中包含敏感词汇，则返回False，否则返回True。
+
+很简单的代码。
+
+请将文件放置于 "项目/ORG/SensitiveFilter.class.php"下。
+
+其中 “ SensitiveThesaurus.php”是一个敏感词汇数组，大家可以任意添加内容。
+*/
