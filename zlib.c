@@ -76,3 +76,15 @@ int gzdecompress(Byte *zdata, uLong nzdata,
 }
 
 #endif // GZIP_H
+
+/*
+ * 
+ 本身这段代码也是从网络上找来的，但是网上的内容都没有针对gzip做特别说明，所以直接拿来用的时候出了些问题，
+ 现将我修改后的发在这里。
+
+注意代码中的注释部分，这里设置是专门针对gzip的，缺少了就不行了，gzip压缩格式和其他格式的区别就在这里。
+Bytef 就是 unsigned char，uLong就是 unsigned long，这些别名的设置都在zconf.h文件里面。
+
+这里压缩和解压缩的数据都可以用java的GZIPInputStream和GZIPOutputStream来对应解压缩和压缩。
+#include的头文件都是zlib自带的文件，可以在官网下载，具体的文件列表可以在这里看
+http://www.oschina.net/code/snippet_222150_18369*
